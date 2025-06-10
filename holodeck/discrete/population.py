@@ -358,8 +358,9 @@ class Pop_Illustris(_Population_Discrete):
         header, data = utils.load_hdf5(fname)
         
         print(f"fname = {fname}")
-        if fname.split('/')[-1] == 'illustris-galaxy-mergers_L75n1820FP_gas-100_dm-100_star-100_bh-000.hdf5':
+        oldFile = True if fname.split('/')[-1] == 'illustris-galaxy-mergers_L75n1820FP_gas-100_dm-100_star-100_bh-000.hdf5' else False
 
+        if oldFile:
             # get hubble param and comoving volume of sim [cm^3]
             hubbleParam = 0.704
             self._sample_volume_mpc3 = header['box_volume_mpc'] / hubbleParam**3  #: comoving-volume of sim [Mpc^3]
@@ -445,12 +446,19 @@ class Pop_Illustris(_Population_Discrete):
         #print(f"{self.mstar_tot.min()=}, {self.mstar_tot.max()=}")
 
         if self._subhalo_mstar_defn == 'SubhaloMassType':
-            self.mstar = data['SubhaloMassType'][:, st_idx, :2]   #: [grams]
+            self.mstar = data['SubhaloMassType'][:, st_idx, :2]   # [grams]
+            self.mstar_desc = data['SubhaloMassType'][:, st_idx, 2]   # [grams]
         elif self._subhalo_mstar_defn == 'SubhaloMassInRadType':
-            self.mstar = data['SubhaloMassInRadType'][:, st_idx, :2]   #: [grams]
+            self.mstar = data['SubhaloMassInRadType'][:, st_idx, :2]   # [grams]
+            self.mstar_desc = data['SubhaloMassInRadType'][:, st_idx, 2]   # [grams]
+        elif self._subhalo_mstar_defn == 'MaxPastMass':
+            # Note that fpMass and npMass must be converted from code units [1e10 Msun/h] to grams
+            self.mstar = np.array([data['fpMass'], data['npMass']]).T *1.0e10*MSOL / hubbleParam   # [grams]
+            #note: (fpMass and npMass are both SubhaloMassType values at MaxPastMass)
+            self.mstar_desc = data['SubhaloMassType'][:, st_idx, 2]   # [grams] 
         else:
             raise ValueError(f"Invalid keyword value: {self._subhalo_mstar_defn=}. "
-                             f"Must be 'SubhaloMassType' or 'SubhaloMassInRadType'")
+                             f"Must be 'SubhaloMassType', 'SubhaloMassInRadType', or 'MaxPastMass'")
 
         # set the bulge fractions
         if isinstance(self._bfrac, (int,float)):
@@ -458,6 +466,7 @@ class Pop_Illustris(_Population_Discrete):
                 raise ValueError(f"self._bfrac value must be in (0,1]. {self._bfrac=}")
             # assign constant stellar bulge fraction to all galaxies
             bulge_frac = np.ones_like(self.mstar) * self._bfrac
+            bulge_frac_desc = np.ones_like(self.mstar_desc) * self._bfrac
         elif isinstance(self._bfrac,(list,tuple,np.ndarray)) and len(self._bfrac)==2:
             if min(self._bfrac)<=0.0 or max(self._bfrac)>1.0:
                 raise ValueError(f"self._bfrac values must be in (0,1]. {self._bfrac=}")
@@ -466,22 +475,29 @@ class Pop_Illustris(_Population_Discrete):
             if np.abs(bf_hi-bf_lo)/bf_lo < 1.0e-6:
                 # assign a constant stellar bulge fraction to all galaxies
                 bulge_frac = np.ones_like(self.mstar) * bf_lo
+                bulge_frac_desc = np.ones_like(self.mstar_desc) * bf_lo
             elif bf_lo < bf_hi:
                 # this call uses default values for keywords mstar_char_log10=11.0 and width_dex=1.0
                 bulge_frac = holo.host_relations.BF_Sigmoid(bf_lo, bf_hi).bulge_frac(self.mstar) 
+                bulge_frac_desc = holo.host_relations.BF_Sigmoid(bf_lo, bf_hi).bulge_frac(self.mstar_desc) 
                 print(f"after call to sigmoid func: {bulge_frac.shape}, {bulge_frac.dtype=}")
+                print(f"after call to sigmoid func: {bulge_frac_desc.shape}, {bulge_frac_desc.dtype=}")
             else:
                 raise ValueError(f"bf_lo must be <= bf_hi. {bf_lo=}, {bf_hi=}")
         elif self._bfrac is None:
             bulge_frac = np.ones_like(self.mstar)
+            bulge_frac_desc = np.ones_like(self.mstar_desc)
             msg = (f"{bulge_frac=}. Setting mbulge=mstar.")
+            msg = (f"{bulge_frac_desc=}. Setting mbulge_desc=mstar_desc.")
             log.warning(msg)
             warnings.warn(msg)
         else:
             raise ValueError(f"bfrac must be of type int, list, tuple, np.ndarray, or None.")
 
-        print(f"before mbulge assignment: {self._bfrac=}, {bulge_frac.shape=}, {bulge_frac.dtype=}")
+        print(f"before mbulge assignment: {self._bfrac=}, {bulge_frac.shape=}, {bulge_frac.dtype=}"
+              f"{bulge_frac_desc.shape=}, {bulge_frac_desc.dtype=}")
         self.mbulge = bulge_frac * self.mstar
+        self.mbulge_desc = bulge_frac_desc * self.mstar_desc
         
         
         # check for zero mbulge and treat based on `self._allow_mbh0` flag
@@ -502,20 +518,30 @@ class Pop_Illustris(_Population_Discrete):
                 log.exception(err)
                 raise ValueError(err)
         else:
-            print("No zero-mass BHs found in this merger tree file!")
+            print("No zero-mass progenitor bulges found in this merger tree file!")
 
         self.vdisp = data['SubhaloVelDisp']    #: Velocity dispersion of galaxy [cm/s]
-        try:
+
+        if oldFile:
+            msg = 'Defining `self.prog_mass_ratio` manually for old Illustris file.'
+            log.warning(msg)
+            warnings.warn(msg)
+            self.prog_mass_ratio = data['fpMass'] / data['npMass'] 
+
+            self.first_prog_mass = data['fpMass'] # first progenitor mass at tmax (time of max past mass) #code units!!
+            self.next_prog_mass = data['npMass'] # next progenitor mass at tmax (time of max past mass) #code units!!
+        else:
             self.prog_mass_ratio = data['ProgMassRatio'] # progenitor mass ratio at tmax (time of max past mass)
-            if self.prog_mass_ratio.max() > 1.0:
-                msg = "Redefining mass ratio to be always <= 1."
-                log.warning(msg)
-                warnings.warn(msg)
-                self.prog_mass_ratio[self.prog_mass_ratio>1] = 1.0 / self.prog_mass_ratio[self.prog_mass_ratio>1]
-            self.first_prog_mass = data['fpMass'] # first progenitor mass at tmax (time of max past mass)
-            self.next_prog_mass = data['npMass'] # next progenitor mass at tmax (time of max past mass)
-        except:
-            pass
+
+            self.first_prog_mass = data['fpMass'] # first progenitor mass at tmax (time of max past mass) #code units!!
+            self.next_prog_mass = data['npMass'] # next progenitor mass at tmax (time of max past mass) #code units!!
+
+        if self.prog_mass_ratio.max() > 1.0:
+            msg = "Redefining mass ratio to be always <= 1."
+            log.warning(msg)
+            warnings.warn(msg)
+            self.prog_mass_ratio[self.prog_mass_ratio>1] = 1.0 / self.prog_mass_ratio[self.prog_mass_ratio>1]
+            
         
         print(f"sample volume = {self._sample_volume:0.4g} [cgs] = {self._sample_volume_mpc3:0.4g} [Mpc^3];"
               f" vol^(1/3) = {(self._sample_volume)**(1.0/3.0) / (1.0e6*PC):0.4g} [Mpc]")
