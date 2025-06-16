@@ -1026,7 +1026,8 @@ class Semi_Analytic_Model:
         valid = (redz_final > 0.0)
         # set redshift final for stalled binaries to -1.0
         redz_final[~valid] = -1.0
-
+        print(f"DEBUG: in sam.rate_chirps(): {redz_final.shape=}, {redz_final[valid].shape=}")
+        
         # ---- calculate coalescence properties
 
         mt, mr, _ = np.meshgrid(self.mtot, self.mrat, None, indexing='ij')
@@ -1038,7 +1039,9 @@ class Semi_Analytic_Model:
         fisco_rst = utils.kepler_freq_from_sepa(mt, risco)
         fisco = fisco_rst / (1.0 + redz_final)
 
-        dc = cosmo.z_to_dcom(redz_final)
+        dc = np.zeros_like(redz_final) * np.nan
+        #hs = np.zeros_like(redz_final)
+        dc[valid] = cosmo.z_to_dcom(redz_final[valid])
         hs = utils.gw_strain_source(mc, dc, fisco_rst)
         dadt = utils.gw_hardening_rate_dadt(m1, m2, risco)
         dfdt, _ = utils.dfdt_from_dadt(dadt, risco, mtot=mt, frst_orb=fisco_rst)
@@ -1066,7 +1069,7 @@ class Semi_Analytic_Model:
         if integrate:
             rate = self._integrate_event_rate(rate)
 
-        return redz_final, rate, fisco, hc
+        return redz_final, rate, fisco, hc, ndens
 
     def _integrate_event_rate(self, rate):
         # (Z-1,)
