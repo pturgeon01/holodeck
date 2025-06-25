@@ -42,6 +42,8 @@ class Discrete:
         #print(f"{self.pop.mstar_tot.min()=}, {self.pop.mstar_tot.max()=}, {self.pop.mstar_tot.shape=}")
         print(f"{self.pop.mstar.min()=}, {self.pop.mstar.max()=}, {self.pop.mstar.shape=}")
 
+        self.sim_mass_resolution()
+        
         # apply modifiers if requested
         if self.mod_mmbulge == True:
             print(f"before mass mod: {self.pop.mass.min()=}, {self.pop.mass.max()=}, {self.pop.mass.shape=}")
@@ -212,7 +214,7 @@ class Discrete:
     def sim_mass_resolution(self):
         # Baryonic mass resolution for each simulation, in Msun
         mres_baryon = {
-            'Ill-1': 1.3e6,
+            'Illustris-1': 1.3e6,
             'TNG50-1': 8.4e4,
             'TNG50-2': 6.8e5,
             'TNG50-3': 5.4e6,
@@ -348,11 +350,11 @@ def create_dpops(tau=1.0, fsa=1.0e4, mod_mmbulge=True, nreals=500, inclIll=True,
     #tpath = '/orange/lblecha/IllustrisTNG/Runs/'
     #ipath = '/orange/lblecha/Illustris/'
     dpop_attrs = {
-        'Ill-1-N010-bh0' : ('galaxy-mergers_Illustris-1_gas-000_dm-000_star-010_bh-000.hdf5', fpath, 
-                            np.array([0,0,0,0,1,0]).astype('int64'), 'darkgreen', 1.5),
-        #'Ill-1-bh0' : ('galaxy-mergers_Illustris-1_gas-100_dm-100_star-100_bh-000.hdf5', fpath, 'g', 1.5),
-        'Ill-1' : ('galaxy-mergers_Illustris-1_gas-100_dm-100_star-100_bh-001.hdf5', fpath, 
-                   np.array([100,100,0,0,100,1]).astype('int64'), 'g', 2.5),
+        'Illustris-1-N010-bh0' : ('galaxy-mergers_Illustris-1_gas-000_dm-000_star-010_bh-000.hdf5', fpath,
+                                  np.array([0,0,0,0,10,0]).astype('int64'), 'darkgreen', 1.5),
+        #'Illustris-1-bh0' : ('galaxy-mergers_Illustris-1_gas-100_dm-100_star-100_bh-000.hdf5', fpath, 'g', 1.5),
+        #'Illustris-1' : ('galaxy-mergers_Illustris-1_gas-100_dm-100_star-100_bh-001.hdf5', fpath, 
+        #                 np.array([100,100,0,0,100,1]).astype('int64'), 'g', 2.5),
         #'TNG50-1-N100' : ('galaxy-mergers_TNG50-1_gas-100_dm-100_star-100_bh-001.hdf5',  fpath, 'darkred', 4),
         #'TNG50-1-N100-bh0' : ('galaxy-mergers_TNG50-1_gas-100_dm-100_star-100_bh-000.hdf5', fpath, 'darkred', 3),
         #'TNG50-1-bh0' : ('galaxy-mergers_TNG50-1_gas-800_dm-800_star-800_bh-000.hdf5', fpath, 'r', 2.5),
@@ -385,7 +387,7 @@ def create_dpops(tau=1.0, fsa=1.0e4, mod_mmbulge=True, nreals=500, inclIll=True,
     
     # ---- Loop thru dict and create dpops
     for l in dpop_attrs.keys():
-        if ('Ill' in l) and (not inclIll): 
+        if ('Illustris' in l) and (not inclIll): 
             continue
         if (l == 'oldIll') and (not inclOldIll):
             continue
