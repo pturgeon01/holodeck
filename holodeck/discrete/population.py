@@ -397,12 +397,45 @@ class Pop_Illustris(_Population_Discrete):
             #                        in zip(data['time'][:,0],data['time'][:,1]) ]) 
             # RG15 defines the *descendant* snap as the merger time
             self.scafa = data['time'][:,2]
-            
+        
+        # ---- Load mstar first so we can easily mask any data with mstar=0
+        if self._subhalo_mstar_defn == 'SubhaloMassType':
+            self.mstar = data['SubhaloMassType'][:, st_idx, :2]   # [grams]
+            self.mstar_desc = data['SubhaloMassType'][:, st_idx, 2]   # [grams]
+        elif self._subhalo_mstar_defn == 'SubhaloMassInRadType':
+            self.mstar = data['SubhaloMassInRadType'][:, st_idx, :2]   # [grams]
+            self.mstar_desc = data['SubhaloMassInRadType'][:, st_idx, 2]   # [grams]
+        elif self._subhalo_mstar_defn == 'MaxPastMass':
+            # Note that fpMass and npMass must be converted from code units [1e10 Msun/h] to grams
+            self.mstar = np.array([data['fpMass'], data['npMass']]).T *1.0e10*MSOL / hubbleParam   # [grams]
+            #note: (fpMass and npMass are both SubhaloMassType values at MaxPastMass)
+            self.mstar_desc = data['SubhaloMassType'][:, st_idx, 2]   # [grams] 
+        else:
+            raise ValueError(f"Invalid keyword value: {self._subhalo_mstar_defn=}. "
+                             f"Must be 'SubhaloMassType', 'SubhaloMassInRadType', or 'MaxPastMass'")
+
+        # ---- Mask any data with mstar=0
+        mstar_mask = ((self.mstar[:,0]>0)&(self.mstar[:,1]>0)&(self.mstar_desc>0))
+        if self.mstar.min() == 0 or self.mstar_desc.min() == 0:
+            msg = (f'{self.mstar_desc[~mstar_mask].size} of {self.mstar_desc.size} binaries '
+                   'have mstar=0 or mstar_desc=0. Removing from merger sample.')
+            self.mstar = self.mstar[mstar_mask,:]
+            self.mstar_desc = self.mstar_desc[mstar_mask]
+            self.scafa = self.scafa[mstar_mask]
+            msg += f' Proceeding with the remaining {self.mstar_desc.size} binaries.'
+            log.warning(msg)
+            warnings.warn(msg)
+        else:
+            if self.mstar_desc[mstar_mask].size != self.mstar_desc.size:
+                msg = ("should not have any masked elements, but masked and original arrays have unequal length: "
+                       f"{self.mstar_desc[mstar_mask].size} != {self.mstar_desc.size}")
+                raise ValueError("should not have any masked elements, but masked and original arrays have unequal length.")
+    
         print(f"DEBUG: in population: {self.scafa.min()=}, {self.scafa.max()=}, {np.median(self.scafa)=}")
         print(f"num with scafa=1: {self.scafa[self.scafa==1].size}")
         # ---- Binary Properties
         # Set initial separation to sum of stellar half-mass radii
-        gal_rads = data['SubhaloHalfmassRadType']
+        gal_rads = data['SubhaloHalfmassRadType'][mstar_mask, :, :]
         gal_rads = gal_rads[:, st_idx, :2] # progenitor galaxy radii
         print(f"{gal_rads.min()=}, {gal_rads.max()=}")
         if (fixed_sepa is not None):
@@ -410,21 +443,25 @@ class Pop_Illustris(_Population_Discrete):
         else:
             self.sepa = np.sum(gal_rads, axis=-1)       #: Initial binary separation [cm]
         print(f"{self.sepa.min()=}, {self.sepa.max()=}")
-        self.mass = data['SubhaloBHMass'][:, :2]       #: progenitor BH Masses in subhalo [grams]
+        self.mass = data['SubhaloBHMass'][mstar_mask, :2]       #: progenitor BH Masses in subhalo [grams]
 
         # check for zero BH mass and treat based on `self._allow_mbh0` flag
-        if self.mass.min() == 0.0:
+        if self.mass.min() == 0:
             if self._allow_mbh0:
                 # identify galaxies with no BH (mbh=0)
                 mask0 = (self.mass[:,0]==0)
                 mask1 = (self.mass[:,1]==0)
                 all0count = np.where((mask0)&(mask1))[0].size 
-                msg = (f"Changing BH mass from 0 to 1e2msun for {self.mass[mask0,0].size} first progs "
-                       f"and {self.mass[mask1,1].size} next progs.\n Both BH masses reset for {all0count} mergers.")
-                log.warning(msg)
-                warnings.warn(msg)
-                self.mass[mask0,0] = 1.0e2 * MSOL ## setting zero-mass BHs to initial mass of 1e2
-                self.mass[mask1,1] = 1.0e2 * MSOL ## setting zero-mass BHs to initial mass of 1e2
+                print(f"Found {self.mass[mask0,0].size} first progs with mbh=0 "
+                      f"and {self.mass[mask1,1].size} next progs with with mbh=0. "
+                      f"{all0count} binaries have mbh=0 for both.")
+
+                #msg = (f"Changing BH mass from 0 to 1e2msun for {self.mass[mask0,0].size} first progs "
+                #       f"and {self.mass[mask1,1].size} next progs.\n Both BH masses reset for {all0count} mergers.")
+                #log.warning(msg)
+                #warnings.warn(msg)
+                #self.mass[mask0,0] = 1.0e2 * MSOL ## setting zero-mass BHs to initial mass of 1e2
+                #self.mass[mask1,1] = 1.0e2 * MSOL ## setting zero-mass BHs to initial mass of 1e2
             else:
                 err = f"One or more galaxies have zero BH mass with {self._allow_mbh0=}!"
                 log.exception(err)
@@ -445,28 +482,10 @@ class Pop_Illustris(_Population_Discrete):
         #print(f"{self.mbulge.min()=}, {self.mbulge.max()=}")
         #print(f"{self.mstar_tot.min()=}, {self.mstar_tot.max()=}")
 
-        if self._subhalo_mstar_defn == 'SubhaloMassType':
-            self.mstar = data['SubhaloMassType'][:, st_idx, :2]   # [grams]
-            self.mstar_desc = data['SubhaloMassType'][:, st_idx, 2]   # [grams]
-        elif self._subhalo_mstar_defn == 'SubhaloMassInRadType':
-            self.mstar = data['SubhaloMassInRadType'][:, st_idx, :2]   # [grams]
-            self.mstar_desc = data['SubhaloMassInRadType'][:, st_idx, 2]   # [grams]
-        elif self._subhalo_mstar_defn == 'MaxPastMass':
-            # Note that fpMass and npMass must be converted from code units [1e10 Msun/h] to grams
-            self.mstar = np.array([data['fpMass'], data['npMass']]).T *1.0e10*MSOL / hubbleParam   # [grams]
-            #note: (fpMass and npMass are both SubhaloMassType values at MaxPastMass)
-            self.mstar_desc = data['SubhaloMassType'][:, st_idx, 2]   # [grams] 
-        else:
-            raise ValueError(f"Invalid keyword value: {self._subhalo_mstar_defn=}. "
-                             f"Must be 'SubhaloMassType', 'SubhaloMassInRadType', or 'MaxPastMass'")
 
-        print("\n***CHECKING for sepa=0***")
-        if self.sepa.min() > 0.0:
-            print("none found!\n")
-        else:
-            print(f"{self.sepa.shape=}, {self.sepa[self.sepa==0].shape=}")
-            print(f"{self.mstar[self.sepa==0,:]}")
-            print(f"{self.mstar_desc[self.sepa==0]}")
+        #print("\n***CHECKING for sepa=0***")
+        if self.sepa.min() == 0:
+            raise ValueError(f"Found {self.sepa.min()=}, but they should all be >0!")
             
         # set the bulge fractions
         if isinstance(self._bfrac, (int,float)):
@@ -509,40 +528,42 @@ class Pop_Illustris(_Population_Discrete):
         
         
         # check for zero mbulge and treat based on `self._allow_mbh0` flag
-        if self.mbulge.min() == 0.0:
-            if self._allow_mbh0:
-                # identify galaxies with mbulge=0
-                mask0 = (self.mbulge[:,0]==0)
-                mask1 = (self.mbulge[:,1]==0)
-                all0count = np.where((mask0)&(mask1))[0].size 
-                msg = (f"Changing mbulge from 0 to 1e5msun for {self.mass[mask0,0].size} first progs "
-                       f"and {self.mass[mask1,1].size} next progs.\n Both BH masses reset for {all0count} mergers.")
-                log.warning(msg)
-                warnings.warn(msg)
-                self.mbulge[mask0,0] = 1.0e5 * MSOL ## setting zero-mass bulges to mass of 1e5
-                self.mbulge[mask1,1] = 1.0e5 * MSOL ## setting zero-mass bulges to mass of 1e5
-            else:
-                err = f"One or more galaxies have zero mbulge with {self._allow_mbh0=}!"
-                log.exception(err)
-                raise ValueError(err)
-        else:
-            print("No zero-mass progenitor bulges found in this merger tree file!")
+        if self.mbulge.min() == 0:
+            raise ValueError(f"Found {self.mbulge.min()=}, but they should all be >0!")
+            
+            #if self._allow_mbh0:
+            #    # identify galaxies with mbulge=0
+            #    mask0 = (self.mbulge[:,0]==0)
+            #    mask1 = (self.mbulge[:,1]==0)
+            #    all0count = np.where((mask0)&(mask1))[0].size 
+            #    #msg = (f"Changing mbulge from 0 to 1e5msun for {self.mass[mask0,0].size} first progs "
+            #    #       f"and {self.mass[mask1,1].size} next progs.\n Both BH masses reset for {all0count} mergers.")
+            #    #log.warning(msg)
+            #    #warnings.warn(msg)
+            #    #self.mbulge[mask0,0] = 1.0e5 * MSOL ## setting zero-mass bulges to mass of 1e5
+            #    #self.mbulge[mask1,1] = 1.0e5 * MSOL ## setting zero-mass bulges to mass of 1e5
+            #else:
+            #    err = f"One or more galaxies have zero mbulge with {self._allow_mbh0=}!"
+            #    log.exception(err)
+            #    raise ValueError(err)
+        #else:
+        #    print("No zero-mass progenitor bulges found in this merger tree file!")
 
-        self.vdisp = data['SubhaloVelDisp']    #: Velocity dispersion of galaxy [cm/s]
+        self.vdisp = data['SubhaloVelDisp'][mstar_mask]    #: Velocity dispersion of galaxy [cm/s]
 
         if oldFile:
             msg = 'Defining `self.prog_mass_ratio` manually for old Illustris file.'
             log.warning(msg)
             warnings.warn(msg)
-            self.prog_mass_ratio = data['fpMass'] / data['npMass'] 
+            self.prog_mass_ratio = data['fpMass'][mstar_mask] / data['npMass'][mstar_mask] 
 
-            self.first_prog_mass = data['fpMass'] # first progenitor mass at tmax (time of max past mass) #code units!!
-            self.next_prog_mass = data['npMass'] # next progenitor mass at tmax (time of max past mass) #code units!!
+            self.first_prog_mass = data['fpMass'][mstar_mask] # first progenitor mass at tmax (time of max past mass) #code units!!
+            self.next_prog_mass = data['npMass'][mstar_mask] # next progenitor mass at tmax (time of max past mass) #code units!!
         else:
-            self.prog_mass_ratio = data['ProgMassRatio'] # progenitor mass ratio at tmax (time of max past mass)
+            self.prog_mass_ratio = data['ProgMassRatio'][mstar_mask] # progenitor mass ratio at tmax (time of max past mass)
 
-            self.first_prog_mass = data['fpMass'] # first progenitor mass at tmax (time of max past mass) #code units!!
-            self.next_prog_mass = data['npMass'] # next progenitor mass at tmax (time of max past mass) #code units!!
+            self.first_prog_mass = data['fpMass'][mstar_mask] # first progenitor mass at tmax (time of max past mass) #code units!!
+            self.next_prog_mass = data['npMass'][mstar_mask] # next progenitor mass at tmax (time of max past mass) #code units!!
 
         if self.prog_mass_ratio.max() > 1.0:
             msg = "Redefining mass ratio to be always <= 1."
