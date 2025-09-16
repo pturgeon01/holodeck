@@ -449,3 +449,23 @@ _param_spaces_dict = {
     'PS_Astro_Strong_MMBulge_BFrac': PS_Astro_Strong_MMBulge_BFrac,
 }
 
+class PS_Astro_Strong_01(_PS_Astro_Strong):
+
+    def __init__(self, log=None, nsamples=None, sam_shape=None, seed=None):
+        parameters = [
+            # Hardening model (phenom 2PL)
+            PD_Uniform("hard_time", 0.1, 11.0, default=3.0),   # [Gyr]
+            
+            # GSMF
+            PD_Normal('gsmf_log10_phi_one_z0', -2.383, 0.028),    # - 2.383 ± 0.028
+            PD_Normal('gsmf_log10_mstar_z0', +10.767, 0.026),     # +10.767 ± 0.026
+            PD_Normal('gsmf_log10_mstar_z1', +0.124, 0.045),      # + 0.124 ± 0.045
+            
+            # MMBulge
+            PD_Normal('mmb_scatter_dex', 0.28, 0.05),             # no uncertainties given
+        ]
+        _Param_Space.__init__(
+            self, parameters,
+            log=log, nsamples=nsamples, sam_shape=sam_shape, seed=seed,
+        )
+        return
