@@ -461,7 +461,8 @@ class PS_Astro_Strong_01(_PS_Astro_Strong):
         )
         return
     
- _param_spaces_dict = {
+
+_param_spaces_dict = {
     'PS_Astro_Strong_All': PS_Astro_Strong_All,
     'PS_Astro_Strong_Hard': PS_Astro_Strong_Hard,
     'PS_Astro_Strong_Hard_All': PS_Astro_Strong_Hard_All,
