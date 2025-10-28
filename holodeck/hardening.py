@@ -1454,6 +1454,143 @@ class Fixed_Time_2PL_SAM(_Hardening):
         dadt_vals = dadt_vals.reshape(shape)
 
         return dadt_vals
+    
+
+
+# ====    New hardening implementation    ====
+class FixedOuterTime_InnerPL_SAM(_Hardening):
+    """Binary evolution for a fixed lifetime at large separations and single PL hardening at small separations.
+    """
+
+    CONSISTENT = True
+    
+    #### TO DO: Add criterion to prevent superluminal hardening(!!) -- should also add to other models
+    ENFORCE_SPEED_LIMIT = False
+
+    def __init__(self, sam, outer_time, fgw_char=1.0/(30*YR), rchar=None, gamma_inner=-1.0, rgw_norm=None, num_steps=300):
+        """Initialize a `FixedOuterTime_InnerPL_SAM` instance using a provided `Semi_Analytic_Model` instance.
+
+        Parameters
+        ----------
+        sam : `holodeck.sam.Semi_Analytic_Model`
+            Input population, from which to use masses, redshifts and separations.
+        outer_time : float,
+            Time between galaxy merger and start of 'inner' binary evolution phase, units of [sec].
+        **kwargs : dict
+            Additional keyword-argument pairs passed to the `FixedOuterTime_InnerPL_SAM` initialization method.
+
+        Returns
+        -------
+        `FixedOuterTime_InnerPL_SAM`
+            Instance configured for the given binary population.
+
+        """
+        import holodeck.sams  # noqa
+        import holodeck.sams.sam_cyutils  # noqa
+
+        assert np.ndim(outer_time) == 0
+        assert np.ndim(fgw_char) == 0
+        assert np.ndim(gamma_inner) == 0
+        
+        if fgw_char is None:
+            if rchar is None:
+                raise ValueError(f"Keywords `fgw_char` and `rchar` cannot both be None.")
+            else:
+                print(f"Using {rchar=} as starting radius for inner inspiral.")
+        else:
+            if rchar is not None:
+                raise ValueError(f"Either `fgw_char` or `rchar` must be None.")
+            else:
+                print(f"Using {fgw_char=} as starting freq for inner inspiral (assuming circular orbits).")
+            
+        mtot, mrat = np.meshgrid(sam.mtot, sam.mrat, indexing='ij')
+        shape = mtot.shape
+        mt, mr = [mm.flatten() for mm in [mtot, mrat]]
+
+        # this is where norm is calculated in fixed-total-time method, uses num_steps
+        # instead we will set rgw_norm here
+
+        self._outer_time = outer_time
+        self._num_steps = num_steps
+        self._fgw_char = fgw_char
+        self._rchar = rchar
+        self._gamma_inner = gamma_inner
+        self._rgw_norm = rgw_norm
+        
+        return
+
+    def __str__(self):
+        msg = (
+            f"{super().__str__()} :: "
+            f"outer_time/Gyr={self._outer_time/GYR:.2e} num_steps={self._num_steps} "
+            f"fgw_char/pc={self._fgw_char/PC:.2e} rchar/pc={self._rchar/PC:.2e} "
+            f"gamma_inner={self._gamma_inner:.2e} rgw_norm={self._rgw_norm:.2e} "
+        )
+        return msg
+
+    def dadt_dedt(self, evo, step, *args, **kwargs):
+        raise NotImplementedError()
+
+    def dadt(self, mtot, mrat, sepa, norm=None):
+        raise NotImplementedError()
+
+        #import holodeck.sams.sam_cyutils   # noqa
+
+        #if norm is None:
+        #    norm = self._norm
+        #    # change shape of `norm` from (M,Q) to (M,Q,Z,R)
+        #    mtot, norm = np.broadcast_arrays(
+        #        mtot, 
+        #        norm[:, :, np.newaxis, np.newaxis]
+        #    )
+
+        #args = np.broadcast_arrays(mtot, mrat, sepa, norm)
+        #shape = args[0].shape
+        #args = [aa.flatten() for aa in args]
+        #mtot, mrat, sepa, norm = args
+        #dadt_vals = holo.sams.sam_cyutils.hard_func_2pwl_gw(
+        #    mtot, mrat, sepa, norm,                             # must all be 1darrays of matching size (X,)
+        #    self._rchar, self._gamma_inner, self._gamma_outer   # must all be scalars
+        #)
+        #dadt_vals = dadt_vals.reshape(shape)
+
+        
+        
+        # () start from the separation where 'inner' hardening begins
+        # (M,) start at initial gw frequency or initial separation
+        if self._fgw_char is not None:
+            rmax = ####    convert fgw_char to a radius for each mtot (assuming circular orbits)
+        else: 
+            rmax = self._rchar * np.ones_like(sam.mtot)
+                
+        # (M,) end at the ISCO
+        rmin = utils.rad_isco(sam.mtot)
+        # rmin = hard._TIME_TOTAL_RMIN * np.ones_like(sam.mtot)
+        # Choose steps for each binary, log-spaced between rmin and rmax
+        extr = np.log10([rmax, rmin])
+        radii = np.linspace(0.0, 1.0, nrads)[np.newaxis, :]
+        # (M, X)
+        radii = extr[0][:, np.newaxis] + (extr[1] - extr[0])[:, np.newaxis] * radii
+        radii = 10.0 ** radii
+
+        # (M, Q, Z, X)
+        mt, mr, rz, rads = np.broadcast_arrays(
+            sam.mtot[:, np.newaxis, np.newaxis, np.newaxis],
+            sam.mrat[np.newaxis, :, np.newaxis, np.newaxis],
+            sam.redz[np.newaxis, np.newaxis, :, np.newaxis],
+            radii[:, np.newaxis, np.newaxis, :]
+        )
+
+        redz_char = rz + ####    dz for outer_time
+        rgw_crit = rgw_norm * ####    factor to convert to a radius in cm
+        dadt_vals[rads <= rgw_crit] = dadt_gw() ####     index properly and do function call properly
+        dadt_vals[rads > rgw_crit] = ####     index properly and fill in equation 
+        redz_final = ####    fill in expression for merger redshift 
+
+        ####    prob need to add some reshaping stuff like in Fixed_Time_2PL_SAM()
+        
+        return dadt_vals, redz_inner, redz_final
+
 
 
 # =================================================================================================
