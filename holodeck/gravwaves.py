@@ -69,6 +69,7 @@ class GW_Discrete(Grav_Waves):
         bg_mr = np.zeros((nfreqs, nreals))
         bg_rzi = np.zeros((nfreqs, nreals))
         bg_rzf = np.zeros((nfreqs, nreals))
+        bg_num = np.zeros((nfreqs, nreals))
 
         if eccen:
             harm_range = range(1, nharms+1)
@@ -99,6 +100,7 @@ class GW_Discrete(Grav_Waves):
             bg_mr[ii, :] = _bgpar[1]
             bg_rzi[ii, :] = _bgpar[2]
             bg_rzf[ii, :] = _bgpar[3]
+            bg_num[ii, :] = _bgpar[4]
 
         self.both = np.sqrt(both)
         self.fore = np.sqrt(fore)
@@ -107,7 +109,7 @@ class GW_Discrete(Grav_Waves):
         self.loudest = loudest
         self.harms = harms
         self.sspar = [ss_mt, ss_mr, ss_rzi, ss_rzf]
-        self.bgpar = [bg_mt, bg_mr, bg_rzi, bg_rzf]
+        self.bgpar = [bg_mt, bg_mr, bg_rzi, bg_rzf, bg_num]
         return
 
 
@@ -345,14 +347,15 @@ def _gws_harmonics_at_evo_fobs(fobs_gw, dlnf, evo, harm_range, nreals, box_vol, 
         redz_final_loud = redz_final_all[:loudest,:]
         redz_final_bg = ( np.sum(redz_final_all[loudest:,:] * hc2_all[loudest:, :],axis=0) / 
                           hc2_all[loudest:, :].sum(axis=0) ) 
+        nbinaries_bg = hc2_all.shape[0] - loudest 
 
         sspar = [mtot_loud, mrat_loud, redz_init_loud, redz_final_loud]
-        bgpar = [mtot_bg, mrat_bg, redz_init_bg, redz_final_bg]
+        bgpar = [mtot_bg, mrat_bg, redz_init_bg, redz_final_bg, nbinaries_bg]
     else:
         fore = np.zeros_like(both)
         loud = np.zeros((loudest, nreals))
         sspar = [np.zeros((loudest,nreals))]*4
-        bgpar = [np.zeros(nreals)]*4
+        bgpar = [np.zeros(nreals)]*5
         print(f"no loud sources in any realizations for {fobs_gw=}")
         
     back = both - fore
