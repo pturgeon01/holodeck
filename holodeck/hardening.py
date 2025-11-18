@@ -1407,8 +1407,10 @@ class Fixed_Time_2PL_SAM(_Hardening):
             time, mt, mr,
             sepa_init, rchar, gamma_inner, gamma_outer, num_steps,
         )
+        print(f"before reshape {norm_log10.shape=}")
         # (M*Q,) ==> (M, Q)
         norm_log10 = np.reshape(norm_log10, shape)
+        print(f"after reshape {norm_log10.shape=}, {shape=}")
 
         self._target_time = time
         self._norm = 10.0 ** norm_log10
@@ -1443,15 +1445,21 @@ class Fixed_Time_2PL_SAM(_Hardening):
                 norm[:, :, np.newaxis, np.newaxis]
             )
 
+        print(f"{mtot.shape=} {mrat.shape=} {sepa.shape=} {norm.shape=}")
         args = np.broadcast_arrays(mtot, mrat, sepa, norm)
         shape = args[0].shape
+        print(f"{len(args)=}, {shape=}")
         args = [aa.flatten() for aa in args]
+        print(f"{len(args)=} {args[0].shape=} after flattening")
         mtot, mrat, sepa, norm = args
+        print(f"before function call{mtot.shape=} {mrat.shape=} {sepa.shape=} {norm.shape=}")
         dadt_vals = holo.sams.sam_cyutils.hard_func_2pwl_gw(
             mtot, mrat, sepa, norm,                             # must all be 1darrays of matching size (X,)
             self._rchar, self._gamma_inner, self._gamma_outer   # must all be scalars
         )
+        print(f"after func call {dadt_vals.shape=}")
         dadt_vals = dadt_vals.reshape(shape)
+        print(f"after reshape {dadt_vals.shape=}")
 
         return dadt_vals
     
@@ -1467,7 +1475,7 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
     #### TO DO: Add criterion to prevent superluminal hardening(!!) -- should also add to other models
     ENFORCE_SPEED_LIMIT = False
 
-    def __init__(self, sam, outer_time, fgw_char=1.0/(30*YR), rchar=None, gamma_inner=-1.0, rgw_norm=None, num_steps=300):
+    def __init__(self, sam, outer_time, rchar=100.0*PC, gamma_inner=-1.0, x_gw_crit=1e3, num_steps=300):
         """Initialize a `FixedOuterTime_InnerPL_SAM` instance using a provided `Semi_Analytic_Model` instance.
 
         Parameters
@@ -1489,19 +1497,19 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
         import holodeck.sams.sam_cyutils  # noqa
 
         assert np.ndim(outer_time) == 0
-        assert np.ndim(fgw_char) == 0
+        #assert np.ndim(fgw_char) == 0
         assert np.ndim(gamma_inner) == 0
         
-        if fgw_char is None:
-            if rchar is None:
-                raise ValueError(f"Keywords `fgw_char` and `rchar` cannot both be None.")
-            else:
-                print(f"Using {rchar=} as starting radius for inner inspiral.")
-        else:
-            if rchar is not None:
-                raise ValueError(f"Either `fgw_char` or `rchar` must be None.")
-            else:
-                print(f"Using {fgw_char=} as starting freq for inner inspiral (assuming circular orbits).")
+        #if fgw_char is None:
+        if rchar is None:
+            raise ValueError(f"Keyword `rchar` cannot be None.")
+        #    else:
+        #        print(f"Using {rchar=} as starting radius for inner inspiral.")
+        #else:
+        #    if rchar is not None:
+        #        raise ValueError(f"Either `fgw_char` or `rchar` must be None.")
+        #    else:
+        #        print(f"Using {fgw_char=} as starting freq for inner inspiral (assuming circular orbits).")
             
         mtot, mrat = np.meshgrid(sam.mtot, sam.mrat, indexing='ij')
         shape = mtot.shape
@@ -1512,10 +1520,10 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
 
         self._outer_time = outer_time
         self._num_steps = num_steps
-        self._fgw_char = fgw_char
-        self._rchar = rchar
+        #### self._fgw_char = fgw_char --- i dont think this is how we should do it after all
+        self._rchar = rchar    #### instead let's let this be input in units of pc or rg
         self._gamma_inner = gamma_inner
-        self._rgw_norm = rgw_norm
+        self._x_gw_crit = x_gw_crit    #### define this in units of rISCO
         
         return
 
@@ -1523,8 +1531,8 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
         msg = (
             f"{super().__str__()} :: "
             f"outer_time/Gyr={self._outer_time/GYR:.2e} num_steps={self._num_steps} "
-            f"fgw_char/pc={self._fgw_char/PC:.2e} rchar/pc={self._rchar/PC:.2e} "
-            f"gamma_inner={self._gamma_inner:.2e} rgw_norm={self._rgw_norm:.2e} "
+            f"rchar/pc={self._rchar/PC:.2e} "
+            f"gamma_inner={self._gamma_inner:.2e} rgw_norm={self._x_gwcrit:.2e} "
         )
         return msg
 
@@ -1532,7 +1540,7 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
         raise NotImplementedError()
 
     def dadt(self, mtot, mrat, sepa, norm=None):
-        raise NotImplementedError()
+        #raise NotImplementedError()
 
         #import holodeck.sams.sam_cyutils   # noqa
 
@@ -1558,20 +1566,36 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
         
         # () start from the separation where 'inner' hardening begins
         # (M,) start at initial gw frequency or initial separation
-        if self._fgw_char is not None:
-            rmax = ####    convert fgw_char to a radius for each mtot (assuming circular orbits)
-        else: 
-            rmax = self._rchar * np.ones_like(sam.mtot)
-                
+        #if self._fgw_char is not None:
+        #    rmax = ####    convert fgw_char to a radius for each mtot (assuming circular orbits)
+        #else: 
+        rmax = self._rchar * np.ones_like(mtot)
+        print(f"{rmax.shape=} {rmax.min()=} {rmax.max()=}")
+            
         # (M,) end at the ISCO
-        rmin = utils.rad_isco(sam.mtot)
+        risco = utils.rad_isco(mtot)
+        rmin = risco
+        rgw_crit = self._x_gw_crit * risco
+        print(f"{rgw_crit.shape=} {rgw_crit.min()=} {rgw_crit.max()=}")
+        print(f"{risco.shape=} {risco.min()=} {risco.max()=}")
+
+        m1, m2 = utils.m1m2_from_mtmr(mtot, mrat)
+        print(f"{m1.shape=} {m2.shape=} {mtot.shape=} {mrat.shape=} {mtot.shape=}")
+        dadt_gw_crit = utils.gw_hardening_rate_dadt(m1, m2, rgw_crit)
+        print(f"{dadt_gw_crit.shape=}")
+
+        if np.any((rgw_crit>rmax)):
+            raise ValueError("all elements of rmax must be > rgw_crit.")
+            
         # rmin = hard._TIME_TOTAL_RMIN * np.ones_like(sam.mtot)
         # Choose steps for each binary, log-spaced between rmin and rmax
         extr = np.log10([rmax, rmin])
-        radii = np.linspace(0.0, 1.0, nrads)[np.newaxis, :]
+        radii = np.linspace(0.0, 1.0, self._num_steps)[np.newaxis, :]
+        print(f"{radii.shape=}, {extr.shape=}")
         # (M, X)
         radii = extr[0][:, np.newaxis] + (extr[1] - extr[0])[:, np.newaxis] * radii
         radii = 10.0 ** radii
+        print(f"{radii.shape=}")
 
         # (M, Q, Z, X)
         mt, mr, rz, rads = np.broadcast_arrays(
@@ -1581,15 +1605,19 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
             radii[:, np.newaxis, np.newaxis, :]
         )
 
-        redz_char = rz + ####    dz for outer_time
-        rgw_crit = rgw_norm * ####    factor to convert to a radius in cm
-        dadt_vals[rads <= rgw_crit] = dadt_gw() ####     index properly and do function call properly
-        dadt_vals[rads > rgw_crit] = ####     index properly and fill in equation 
-        redz_final = ####    fill in expression for merger redshift 
+        redz_char = redz_after(self._outer_time, redz=rz, age=None)   # redshift at end of 'outer' phase 
+
+        dadt_gw = utils.gw_hardening_rate_dadt(m1, m2, rads)
+
+        dadt = dadt_gw_crit * ( rads / rgw_crit ) ** (1.0-self._gamma_inner) ## inner PL hardening
+        dadt += dadt_gw
+            
+        inner_time = -utils.trapz_loglog(-1.0 / dadt, rads, axis=2, cumsum=True)
+        redz_final = redz_after(inner_time, redz=redz_char, age=None) # merger redshift 
 
         ####    prob need to add some reshaping stuff like in Fixed_Time_2PL_SAM()
         
-        return dadt_vals, redz_inner, redz_final
+        return dadt_vals, redz_char, redz_final
 
 
 
