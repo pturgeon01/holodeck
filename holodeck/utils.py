@@ -34,7 +34,7 @@ import scipy.stats    # noqa
 import scipy.special  # noqa
 
 from holodeck import log, cosmo
-from holodeck.constants import NWTG, SCHW, SPLC, YR, GYR, EDDT
+from holodeck.constants import NWTG, SCHW, RGRV, SPLC, YR, GYR, EDDT
 
 # [Sesana2004]_ Eq.36
 _GW_SRC_CONST = 8 * np.power(NWTG, 5/3) * np.power(np.pi, 2/3) / np.sqrt(10) / np.power(SPLC, 4)
@@ -1831,6 +1831,24 @@ def schwarzschild_radius(mass):
     """
     rs = SCHW * mass
     return rs
+
+
+def gravitational_radius(mass):
+    """Return the gravitational radius [cm] for the given mass [grams].
+
+    Parameters
+    ----------
+    m1 : array_like
+        Mass [grams]
+
+    Returns
+    -------
+    rg : array_like,
+        Gravitational radius for this mass.
+
+    """
+    rg = RGRV * mass
+    return rg
 
 
 def velocity_orbital(mt, mr, per=None, sepa=None):
