@@ -47,7 +47,8 @@ class Test_SAM:
     def __init__(self, model_type='old', nreals=10, nloud=5, gpf_flag=0,
                  skip_evo=False, bfrac=None, 
                  hard_t=None, hard_ai=None, hard_rc=None, 
-                 hard_nin=None, hard_nout=None, gsmf_flag = None):
+                 hard_nin=None, hard_nout=None, gsmf_flag = None,
+                 mmbulge=None, var_value=None):
 
         self.model_type = model_type
         self.nreals = nreals
@@ -65,7 +66,7 @@ class Test_SAM:
             self.set_sam_params_grid(tau=hard_t, ai=hard_ai, rc=hard_rc, 
                                      nin=hard_nin, nout=hard_nout, mf = gsmf_flag)
         else:
-            self.set_sam_params_manual(tau=hard_t)
+            self.set_sam_params_manual(tau=hard_t, var_value=var_value)
 
         self.nfreqs = self.PARS['freqs'].size
         print(f"{self.nfreqs=}")
@@ -73,8 +74,16 @@ class Test_SAM:
         if gpf_flag:
             print(f"creating SAM using GPF with {self.model_type=}...")
             self.lbl = model_type+'_gpf'
-            self.sam = sams.Semi_Analytic_Model(gsmf = self.PARS['gsmf'], 
-                                                gpf = sams.GPF_Power_Law())
+            if mmbulge is None:
+                # use default mmbulge pars
+                self.sam = sams.Semi_Analytic_Model(gsmf = self.PARS['gsmf'], 
+                                                    gpf = sams.GPF_Power_Law())
+            else:
+                return np.nan
+                self.sam = sams.Semi_Analytic_Model(gsmf = self.PARS['gsmf'], 
+                                                    gpf = sams.GPF_Power_Law(),
+                                                    mmbulge = sams.host_relations.MMBulge_KH2013(mamp=self.PARS['mamp_log10'],
+                                                                                                 scatter_dex=self.PARS['mmscatter']))
         else:
             print(f"creating SAM using GMR with {self.model_type=}...")
             self.lbl = model_type+'_gmr'
@@ -97,7 +106,7 @@ class Test_SAM:
 
 
             
-    def set_sam_params_manual(self, tau=None):
+    def set_sam_params_manual(self, tau=None, var_value=None):
 
         if tau is None:
             raise ValueError("must choose a numerical value of keyword tau (in Gyr)!")
@@ -166,9 +175,137 @@ class Test_SAM:
                 hard_gamma_outer=+2.5,
                 gsmf = holo.sams.GSMF_Double_Schechter()
             )
+        elif self.model_type == 'ph15_nuivar':
+            # gamma_inner hardening PL index, varied for NG15, Model A, & Model B
+            if var_value is None:
+                raise ValueError(f'{var_value=} invalid for {self.model_type=}')
+            else:
+                self.PARS = dict(
+                    desc='15yr Phenom w/ nu_inner varied',
+                    hard_sepa_init=1e4,     # [pc]
+                    hard_rchar=100.0,        # [pc]
+                    hard_gamma_inner=var_value,
+                    hard_gamma_outer=+2.5,
+                    gsmf = holo.sams.GSMF_Schechter()
+                )
+        elif self.model_type == 'ph15_muvar':
+            # MMbulge norm, varied for NG15 and Model A, fixed for Model B
+            pass
+            #mamp_log10=None
+            self.PARS = dict(
+                desc='15yr Phenom',
+                hard_sepa_init=1e4,     # [pc]
+                hard_rchar=100.0,        # [pc]
+                hard_gamma_inner=-1.0,
+                hard_gamma_outer=+2.5,
+                gsmf = holo.sams.GSMF_Schechter()
+            )
+        elif self.model_type == 'ph15_epsmuvar':
+            # MMbulge scatter, varied for NG15 and Model A, fixed for Model B
+            pass
+        elif self.model_type == 'ph15_phivar':
+            # z=0 norm for Chen19 GSMF schechter func, varied for NG15
+            # analogous to astr_rc100_phii0var for Model A & B
+            self.PARS = dict(
+                desc='15yr Phenom w/ phivar',
+                hard_sepa_init=1e4,     # [pc]
+                hard_rchar=100.0,        # [pc]
+                hard_gamma_inner=-1.0,
+                hard_gamma_outer=+2.5,
+                gsmf = holo.sams.GSMF_Schechter(phi0=var_value)
+            )
+        elif self.model_type == 'ph15_Mphivar':
+            # z=0 Mchar for Chen19 GSMF schechter func, varied for NG15
+            # analogous to astr_Mc0var for Model A & B
+            self.PARS = dict(
+                desc='15yr Phenom w/ Mphivar',
+                hard_sepa_init=1e4,     # [pc]
+                hard_rchar=100.0,        # [pc]
+                hard_gamma_inner=-1.0,
+                hard_gamma_outer=+2.5,
+                gsmf = holo.sams.GSMF_Schechter(mchar0_log10=var_value)
+            )
+        elif self.model_type == 'astr_rc100_nuivar':
+            # gamma_inner hardening PL index, varied for NG15, Model A, & Model B
+            if var_value is None:
+                raise ValueError(f'{var_value=} invalid for {self.model_type=}')
+            else:
+                self.PARS = dict(
+                    desc='Astro Strong w/ rchar=100 & w/ nu_inner varied',
+                    hard_sepa_init=1e4,     # [pc]
+                    hard_rchar=100.0,        # [pc]
+                    hard_gamma_inner=var_value,
+                    hard_gamma_outer=+2.5,
+                    gsmf = holo.sams.GSMF_Double_Schechter()
+                )
+        elif self.model_type == 'astr_rc100_muvar':
+            # MMbulge norm, varied for NG15 and Model A, fixed for Model B
+            pass
+        elif self.model_type == 'astr_rc100_epsmuvar':
+            # MMbulge scatter, varied for NG15 and Model A, fixed for Model B
+            pass
+        elif self.model_type == 'astr_rc100_phi10var':
+            # z=0 norm for 1st Leja20 GSMF schechter func
+            # varied for Model A and Model B, analogous to ph15_phivar for NG15
+            self.PARS = dict(
+                desc='Astro Strong w/ rchar=100 & w phi10 varied',
+                hard_sepa_init=1e4,     # [pc]
+                hard_rchar=100.0,        # [pc]
+                hard_gamma_inner=-1.0,
+                hard_gamma_outer=+2.5,
+                gsmf = holo.sams.GSMF_Double_Schechter(log10_phi1=[var_value, -0.264, -0.107])
+            )
+        elif self.model_type == 'astr_rc100_phi20var':
+            # z=0 norm for 2nd Leja20 GSMF schechter func
+            # varied for Model A and Model B, analogous to ph15_phivar for NG15
+            self.PARS = dict(
+                desc='Astro Strong w/ rchar=100 & w phi20 varied',
+                hard_sepa_init=1e4,     # [pc]
+                hard_rchar=100.0,        # [pc]
+                hard_gamma_inner=-1.0,
+                hard_gamma_outer=+2.5,
+                gsmf = holo.sams.GSMF_Double_Schechter(log10_phi2=[var_value, -0.368, +0.046])
+            )
+        elif self.model_type == 'astr_rc100_Mc0var':
+            # z=0 Mchar for Leja20 GSMF schechter func
+            # varied for Model A and Model B, analogous to phi15_Mphivar for NG15
+            self.PARS = dict(
+                desc='Astro Strong w/ rchar=100 & w Mchar0 varied',
+                hard_sepa_init=1e4,     # [pc]
+                hard_rchar=100.0,        # [pc]
+                hard_gamma_inner=-1.0,
+                hard_gamma_outer=+2.5,
+                gsmf = holo.sams.GSMF_Double_Schechter(log10_mstar=[var_value, +0.124, -0.033])
+            )
+        elif self.model_type == 'astr_rc100_Mc1var':
+            # linear z-evol term for Mchar for Leja20 GSMF schechter func
+            # varied for Model A and Model B, doesn't exist in NG15
+            self.PARS = dict(
+                desc='Astro Strong w/ rchar=100 & w Mchar1 varied',
+                hard_sepa_init=1e4,     # [pc]
+                hard_rchar=100.0,        # [pc]
+                hard_gamma_inner=-1.0,
+                hard_gamma_outer=+2.5,
+                gsmf = holo.sams.GSMF_Double_Schechter(log10_mstar=[+10.767, var_value, -0.033])
+            )
+        elif self.model_type == 'astr_rc100_Mc2var':
+            # quadratic z-evol term for Mchar for Leja20 GSMF schechter func
+            # varied for Model A and Model B, doesn't exist in NG15         
+            self.PARS = dict(
+                desc='Astro Strong w/ rchar=100 & w Mchar2 varied',
+                hard_sepa_init=1e4,     # [pc]
+                hard_rchar=100.0,        # [pc]
+                hard_gamma_inner=-1.0,
+                hard_gamma_outer=+2.5,
+                gsmf = holo.sams.GSMF_Double_Schechter(log10_mstar=[+10.767, +0.124, var_value])
+            )
+            
         else:
-            modlist = ['old', 'old_2s', 'old_rc100', 'ph15', 
-                       'astr', 'astr_nuo0', 'astr_rc100']
+            modlist = ['old', 'old_2s', 'old_rc100', 'ph15', 'astr', 'astr_nuo0', 'astr_rc100',
+                       'ph15_nuivar', 'ph15_muvar', 'ph15_epsmuvar', 'ph15_phivar', 'ph15_Mphivar',
+                       'astr_rc100_nuivar', 'astr_rc100_muvar', 'astr_rc100_epsmuvar',
+                       'astr_rc100_phi10var', 'astr_rc100_phi20var', 
+                       'astr_rc100_Mc0var', 'astr_rc100_Mc1var', 'astr_rc100_Mc2var']
 
             raise ValueError(f"{self.model_type=} is not defined. Options are {[m for m in modlist]}.")
 
@@ -264,7 +401,119 @@ def create_sams(nreals=5, nloud=5, fpath=_PATH_DATA, suite_type='grid',
         if pickle_sams and pickle_name is None:
             gpf_str = ['gmr', 'gpf']
             pickle_name = f'manual_moddefs_{gpf_str[gpfflag]}_tau{tau}'
+            
+    elif suite_type == 'old_new_mods_compare':
+        test_model_list = [
+                           'ph15',
+                           'astr_rc100'
+                          ]
+        if gpfflag is not None:
+            print(f"WARNING: overriding keyword {gpfflag=} for {suite_type=}.")
+            gpfflag = None
+        gpf_list = [1, 0]
 
+        for i,mod in enumerate(test_model_list):
+            if tau is None:
+                print(f'WARNING: keyword `tau` set to None. Assigning hard tscale tau=5.55 Gyr.')
+                tau = 5.55
+                
+            print(f'Creating test SAM for model_type {mod} with gpf_flag={gpf_list[i]} & tau={tau}.')
+            s = Test_SAM(model_type=mod, nreals=nreals, nloud=nloud, gpf_flag=gpf_list[i], hard_t=tau)
+
+            all_sams = all_sams + [s]
+                
+        if pickle_sams and pickle_name is None:
+            gpf_str = ['gmr', 'gpf']
+            pickle_name = f'old_new_mods_compare_tau{tau}'
+
+    elif suite_type == 'model_a_varied':
+        # varying tau, nu_inner, z=0 GSMF pars, MMBulge pars
+        # fixed nu_outer, rchar, GSMF evol pars
+               ]
+        if gpfflag is not None:
+            print(f"WARNING: overriding keyword {gpfflag=} for {suite_type=}. Setting to 0.")
+        gpfflag = 0
+        if tau is not None:
+            print(f'WARNING: overriding keyword {tau=}. Varying from 0.1 to 11.0 Gyr.')
+            tau = None
+            
+        varied_values = dict(
+            astr_rc100=[0.1, 5.55, 11.0],
+            astr_rc100_nuivar=[],
+            astr_rc100_muvar=[], 
+            astr_rc100_epsmuvar=[],
+            astr_rc100_phi10var=[],
+            astr_rc100_phi20var=[],
+            astr_rc100_Mc0var=[]
+        )
+
+        print(f'{gpfflag=}')
+        for m in varied_values.keys():
+            for i in range(len(varied_values[m])):
+                if m=='astr_rc100':
+                    print(f'Creating test SAM for model_type {m} w/ tau={tau_vals[i]}.')
+                    s = Test_SAM(model_type=m, nreals=nreals, nloud=nloud, gpf_flag=gpfflag, hard_t=varied_values[m][i])
+                else:
+                    print(f'Creating test SAM for model_type {m} w/ {tau_vals[1]=} & {varied_values[m][i]=}.')
+                    s = Test_SAM(model_type=m, nreals=nreals, nloud=nloud, gpf_flag=gpfflag, var_value=varied_values[m][i])
+
+                all_sams = all_sams + [s]
+                
+        if pickle_sams and pickle_name is None:
+            pickle_name = suite_type
+    
+    elif suite_type == 'model_b_varied':
+        # varying tau, nu_inner, z=0 GSMF pars, GSMF evol pars
+        # fixed nu_outer, rchar, MMBulge pars 
+
+        if gpfflag is not None:
+            print(f"WARNING: overriding keyword {gpfflag=} for {suite_type=}. Setting to 0.")
+        gpfflag = 0    
+        if tau is not None:
+            print(f'WARNING: overriding keyword {tau=}. Varying from 0.1 to 11.0 Gyr.')
+            tau = None
+            
+        varied_values = dict(
+            astr_rc100=[0.1, 5.55, 11.0],
+            astr_rc100_nuivar=[],
+            astr_rc100_phi10var=[],
+            astr_rc100_phi20var=[],
+            astr_rc100_Mc0var=[],
+            astr_rc100_Mc1var=[],
+            astr_rc100_Mc2var=[]
+        )
+
+        print(f'{gpfflag=}')
+        for m in varied_values.keys():
+            for i in range(len(varied_values[m])):
+                if m=='astr_rc100':
+                    print(f'Creating test SAM for model_type {m} w/ tau={tau_vals[i]}.')
+                    s = Test_SAM(model_type=m, nreals=nreals, nloud=nloud, gpf_flag=gpfflag, hard_t=varied_values[m][i])
+                else:
+                    print(f'Creating test SAM for model_type {m} w/ {tau_vals[1]=} & {varied_values[m][i]=}.')
+                    s = Test_SAM(model_type=m, nreals=nreals, nloud=nloud, gpf_flag=gpfflag, var_value=varied_values[m][i])
+
+                all_sams = all_sams + [s]
+                
+        if pickle_sams and pickle_name is None:
+            pickle_name = suite_type
+
+
+
+
+    elif suite_type == 'phenom15_varied':
+        # varying tau, nu_inner, z=0 GSMF pars,  MMBulge pars 
+        # fixed nu_outer, rchar, GSMF evol pars
+        raise NotImplementedError
+        
+        test_model_list = [
+                           'ph15', 'ph15_nuivar', 'ph15_muvar', 'ph15_epsmuvar', 
+                           'ph15_phivar', 'ph15_Mphivar'
+                          ]
+        if gpfflag is not None:
+            print(f"WARNING: overriding keyword {gpfflag=} for {suite_type=}. Setting to 1.")
+        gpfflag = 1
+    
     if pickle_sams:
         nfreqs = all_sams[0].PARS['freqs'].size
         pkl_fname = f"test_sam_nfreqs{nfreqs}_nreals{nreals}_nloud{nloud}_{pickle_name}.pkl"
