@@ -75,6 +75,9 @@ For some scripts (particularly for generating libraries), an MPI implementation 
 
 **macos users**: if you are using homebrew on macos, you should be able to simply run: `brew install mpi4py` which will [include the required openmpi implementation](https://mpi4py.readthedocs.io/en/latest/install.html#macos).
 
+### Windows
+
+Windows compatibility is not a high priority at the moment.  Many users have reported success using [WSL](https://learn.microsoft.com/en-us/windows/wsl/install). If you want to install `holodeck` natively on Windows, check out [information reported here](https://github.com/nanograv/holodeck/pull/121#issuecomment-3563570566).
 
 ## Quickstart
 
