@@ -3,7 +3,7 @@
 
 import holodeck as holo
 from holodeck.constants import GYR, PC, MSOL
-from holodeck.librarian.lib_tools import _Param_Space, PD_Uniform, PD_Normal, PD_Uniform_Log
+from holodeck.librarian.lib_tools import _Param_Space, PD_Uniform, PD_Normal, PD_Uniform_Log, PD_MVNormal
 
 
 # Define a new Parameter-Space class by subclassing the base class:
@@ -439,7 +439,45 @@ class PS_Astro_Strong_MMBulge(_PS_Astro_Strong):
         return
 
 
+class PS_Test_Astro_Strong_Covariant_MMBulge(_PS_Astro_Strong):
+    """
+    Test Parameter Space derived from PS_Astro_Strong, demonstrating a 
+    Multivariate Normal distribution for MMBulge parameters.
+
+    - mmb_mamp_log10 and mmb_plaw are strongly coupled (rho=0.9).
+    - mmb_scatter_dex remains independent.
+    """
+
+    def __init__(self, log=None, nsamples=None, sam_shape=None, seed=None):
+        
+        # --- 1. Define the parameters using a mix of univariate and multivariate distributions ---
+        parameters = [
+            
+            # 1. Multivariate Distribution: mmb_mamp_log10 and mmb_plaw
+            PD_MVNormal(
+                names=('mmb_mamp_log10', 'mmb_plaw'),
+                means=[8.69, 1.17],
+                cov=[
+                    [0.0025, 0.0036],   # Variance for mamp (0.05^2), Covariance with plaw (0.9*0.05*0.08)
+                    [0.0036, 0.0064],   # Covariance with mamp, Variance for plaw (0.08^2)
+                ]
+            ),
+            
+            # 2. Univariate Distribution: mmb_scatter_dex (Independent)
+            PD_Normal('mmb_scatter_dex', 0.28, 0.05),
+        ]
+        
+        # --- 2. Initialize the base class (_Param_Space) ---
+        # The base class handles flattening the names and sampling 3 dimensions in total.
+        _Param_Space.__init__(
+            self, parameters,
+            log=log, nsamples=nsamples, sam_shape=sam_shape, seed=seed,
+        )
+        return
+
+
 _param_spaces_dict = {
+    'PS_Test': PS_Test,
     'PS_Astro_Strong_All': PS_Astro_Strong_All,
     'PS_Astro_Strong_Hard': PS_Astro_Strong_Hard,
     'PS_Astro_Strong_Hard_All': PS_Astro_Strong_Hard_All,
@@ -447,5 +485,6 @@ _param_spaces_dict = {
     'PS_Astro_Strong_GMR': PS_Astro_Strong_GMR,
     'PS_Astro_Strong_MMBulge': PS_Astro_Strong_MMBulge,
     'PS_Astro_Strong_MMBulge_BFrac': PS_Astro_Strong_MMBulge_BFrac,
+    'PS_Test_Astro_Strong_Covariant_MMBulge': PS_Test_Astro_Strong_Covariant_MMBulge,
 }
 
