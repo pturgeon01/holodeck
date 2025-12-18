@@ -110,7 +110,7 @@ class _Param_Space(abc.ABC):
                 msg = f"Found '{pdist_name}' in parameters, should be '{new_name}'!"
                 log.error(msg)
                 # When there is no change in the parameter VALUES, we can just change the name
-                if new_func is None: 
+                if new_func is None:
                     pdist.name = new_name
                     msg = f"Replacing '{pdist_name}' ==> '{new_name}'!"
                     log.error(msg)
@@ -118,7 +118,7 @@ class _Param_Space(abc.ABC):
                     err = f"CANNOT replace '{pdist_name}' ==> '{new_name}'!"
                     log.exception(err)
                     raise ValueError(err)
-                
+
             if isinstance(pdist_name, (list, tuple)):
                 self.param_names.extend(pdist_name)
                 self._nparameters += len(pdist_name)
@@ -143,49 +143,49 @@ class _Param_Space(abc.ABC):
 
         self._log = log
         return
-   
+
     def _transform_samples(self):
         """
         Transforms the uniform samples self._uniform_samples into distributed parameter samples.
-        
+
         This method is updated to correctly pass the required number of uniform dimensions
         to each _Param_Dist object, whether it is univariate (1D) or multivariate (ND).
         """
-        
+
         # Initialize the array to hold the final, transformed parameter samples
         param_samples = np.zeros((self._nsamples, self._nparameters))
-        
+
         # Tracks the current column index in the uniform samples array
-        current_idx = 0 
-        
+        current_idx = 0
+
         for pdist in self._parameters:
             pdist_name = pdist.name
-            
+
             # Determine the number of dimensions/columns this distribution requires
             if isinstance(pdist_name, (list, tuple)):
                 n_dims = len(pdist_name)
             else:
                 n_dims = 1
-                
+
             # Slice the correct block of uniform samples for this distribution
             # The shape will be (nsamples, n_dims)
             uniform_block = self._uniform_samples[:, current_idx : current_idx + n_dims]
-            
+
             # Apply the distribution's transformation function
             # The __call__ method handles the conversion from uniform to the desired distribution (e.g., Normal)
             transformed_block = pdist(uniform_block)
-            
+
             # Ensure the output is 2D and has the correct number of columns before insertion
             if transformed_block.ndim == 1:
                 # Reshape (nsamples,) to (nsamples, 1) for univariate case
                 transformed_block = transformed_block.reshape(-1, 1)
-                
+
             # Insert the transformed values into the final array
             param_samples[:, current_idx : current_idx + n_dims] = transformed_block
-            
+
             # Advance the index tracker
             current_idx += n_dims
-            
+
         # The final samples array shape is (nsamples, n_total_parameters)
         return param_samples
 
@@ -376,7 +376,7 @@ class _Param_Space(abc.ABC):
             pspace_class = cls
 
         # construct instance with dummy/temporary values (which will be overwritten)
-        if np.all(data['param_samples'] == None):   # noqa : use ``== None`` to match arrays
+        if np.all(data['param_samples'] == None):   # noqa: E711
             nsamples = None
             nparameters = None
         else:
@@ -437,12 +437,12 @@ class _Param_Space(abc.ABC):
         """
         # 1. Get the extrema for each distribution object (dd.extrema)
         extr_list = [dd.extrema for dd in self._parameters]
-        
-        # 2. Promote any 1D array (from univariate distributions, shape (2,)) 
+
+        # 2. Promote any 1D array (from univariate distributions, shape (2,))
         #    to 2D (shape (1, 2)) using np.atleast_2d, and stack them vertically.
         #    Multivariate distributions (shape (N, 2)) are unchanged by atleast_2d.
         extr_stacked = np.vstack([np.atleast_2d(e) for e in extr_list])
-        
+
         return extr_stacked
         # extr = [dd.extrema for dd in self._parameters] # the old version
         # return np.asarray(extr)
@@ -549,7 +549,9 @@ class _Param_Dist(abc.ABC):
             elif clip.ndim == 1 and clip.shape[0] == 2:
                 clip = clip.reshape(1, 2)
             else:
-                raise ValueError(f"The 'clip' argument must be array-like with shape (n_dims, 2) for multivariate distributions, or (2,) for single-parameter distributions: [lower_bound, upper_bound]. got {clip.shape}!")
+                raise ValueError(f"The 'clip' argument must be array-like with shape (n_dims, 2)\
+                                  for multivariate distributions, or (2,) for single-parameter distributions:\
+                                  [lower_bound, upper_bound]. got {clip.shape}!")
         self._clip = clip
         self._name = name
         self._default = default
@@ -561,14 +563,16 @@ class _Param_Dist(abc.ABC):
 
         if n_dims is not None:
             if xx.ndim != 2:
-                raise ValueError(f"Input samples 'xx' must be 2-dimensional (n_samples, n_dims) for this {n_dims}-parameter distribution! got {xx.ndim=}")
+                raise ValueError(f"Input samples 'xx' must be 2-dimensional \
+                                 (n_samples, n_dims) for this {n_dims}-parameter distribution! got {xx.ndim=}")
             if xx.shape[1] != n_dims:
                 raise ValueError(f"Input samples 'xx'has {xx.shape[1]} dimensions but distribution requires {n_dims} parameters.")
         rv = self._dist_func(xx)
         if self._clip is not None:
             n_dims_check = n_dims if n_dims is not None else self._clip.shape[0]
             if self._clip.shape[0] != n_dims_check:
-                raise ValueError(f"Internal error: The 'clip' array has {self._clip.shape[0]} rows, but the distribution requires {n_dims_check} parameters.")
+                raise ValueError(f"Internal error: The 'clip' array has {self._clip.shape[0]} rows, but the distribution requires \
+                                 {n_dims_check} parameters.")
             lower_bounds = self._clip[:, 0]
             upper_bounds = self._clip[:, 1]
             rv = np.clip(rv, lower_bounds, upper_bounds)
@@ -603,7 +607,7 @@ class _Param_Dist(abc.ABC):
             result = result.squeeze()
         return result
         # if self.n_params is None or self.n_params == 1:
-        #     return self(np.asarray([0.0, 1.0]))  
+        #     return self(np.asarray([0.0, 1.0]))
         # else:
 
         #     transformed_bounds = self(uniform_bounds)
@@ -712,19 +716,20 @@ class PD_MVNormal(_Param_Dist):
 
         """
         # Convert inputs to numpy arrays
-        means = np.asarray(means) 
+        means = np.asarray(means)
         cov = np.asarray(cov)
         n_params = len(names)
-        
+
         # --- SIZE AND DIMENSION CHECKS ---
         assert cov.ndim == 2, "Covariance matrix must be 2-dimensional."
         assert cov.shape[0] == cov.shape[1], "Covariance matrix must be square (n x n)."
-        assert cov.shape[0] == n_params, f"The number of names ({n_params}) must match the dimension of the covariance matrix ({cov.shape[0]})."
+        assert cov.shape[0] == n_params, f"The number of names ({n_params}) must match the dimension of the covariance matrix \
+            ({cov.shape[0]})."
         assert means.ndim == 1, "Mean vector must be 1-dimensional."
         assert len(means) == n_params, f"The length of the means vector ({len(means)}) must match the number of parameters ({n_params})."
-        
+
         # --- VALIDITY CHECKS ---
-        
+
         # 1. Positive Definiteness Check & Store Cholesky Factor (Single Call)
         # Cholesky decomposition only succeeds for Positive Definite matrices.
         try:
@@ -732,20 +737,20 @@ class PD_MVNormal(_Param_Dist):
         except LinAlgError:
             # If the decomposition fails, the matrix is not positive definite.
             raise AssertionError("Covariance matrix must be positive definite (non-degenerate).")
-            
+
         # 2. Check for Symmetry (Physical requirement for covariance)
         assert np.allclose(cov, cov.T), "Covariance matrix must be symmetric."
 
         # Pass a single identifying name to the base class ### KG Note to self: probably want to have it be a tuple of all the names
         super().__init__(name=tuple(names), clip=clip, **kwargs)
-        
+
         self._names = names
         self._cov = cov
         self._means = means # Stored as _means
-        
+
         # Create the frozen SciPy distribution (Accessed via sp.stats)
         self._frozen_dist = sp.stats.multivariate_normal(mean=means, cov=cov)
-        
+
         return
 
     def _dist_func(self, xx):
@@ -756,14 +761,14 @@ class PD_MVNormal(_Param_Dist):
         # 1. Transform uniform samples into standard normal samples (zz ~ N(0, I))
         # zz has mean 0 and covariance I (identity)
         zz = sp.stats.norm.ppf(xx) # Accessed via sp.stats
-        
+
         # 2. Apply the Cholesky factor (_L) and add the means vector (mu)
         # y = mu + _L @ z.T (then transpose back)
         # This transforms N(0, I) to N(mu, Sigma=_L*_L.T)
         yy = np.dot(self._L, zz.T).T + self._means # Used _L and _means
-        
+
         return yy
-    
+
     @property
     def n_params(self):
         """Overrides base class to return the number of dimensions."""

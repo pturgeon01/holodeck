@@ -441,7 +441,7 @@ class PS_Astro_Strong_MMBulge(_PS_Astro_Strong):
 
 class PS_Test_Astro_Strong_Covariant_MMBulge(_PS_Astro_Strong):
     """
-    Test Parameter Space derived from PS_Astro_Strong, demonstrating a 
+    Test Parameter Space derived from PS_Astro_Strong, demonstrating a
     Multivariate Normal distribution for MMBulge parameters.
 
     - mmb_mamp_log10 and mmb_plaw are strongly coupled (rho=0.9).
@@ -449,10 +449,10 @@ class PS_Test_Astro_Strong_Covariant_MMBulge(_PS_Astro_Strong):
     """
 
     def __init__(self, log=None, nsamples=None, sam_shape=None, seed=None):
-        
+
         # --- 1. Define the parameters using a mix of univariate and multivariate distributions ---
         parameters = [
-            
+
             # 1. Multivariate Distribution: mmb_mamp_log10 and mmb_plaw
             PD_MVNormal(
                 names=('mmb_mamp_log10', 'mmb_plaw'),
@@ -462,11 +462,11 @@ class PS_Test_Astro_Strong_Covariant_MMBulge(_PS_Astro_Strong):
                     [0.0036, 0.0064],   # Covariance with mamp, Variance for plaw (0.08^2)
                 ]
             ),
-            
+
             # 2. Univariate Distribution: mmb_scatter_dex (Independent)
             PD_Normal('mmb_scatter_dex', 0.28, 0.05),
         ]
-        
+
         # --- 2. Initialize the base class (_Param_Space) ---
         # The base class handles flattening the names and sampling 3 dimensions in total.
         _Param_Space.__init__(
