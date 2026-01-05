@@ -429,7 +429,7 @@ def create_sams(nreals=5, nloud=5, fpath=_PATH_DATA, suite_type='grid',
     elif suite_type == 'model_a_varied':
         # varying tau, nu_inner, z=0 GSMF pars, MMBulge pars
         # fixed nu_outer, rchar, GSMF evol pars
-               ]
+               
         if gpfflag is not None:
             print(f"WARNING: overriding keyword {gpfflag=} for {suite_type=}. Setting to 0.")
         gpfflag = 0
