@@ -1478,7 +1478,7 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
 
     def __init__(self, sam, num_steps=300, outer_time=1.0*GYR, rchar=100.0*PC, 
                  gamma_inner=-1.0, x_gw_crit=1e3, gw_crit_units='rg',
-                 r_gw_crit_9=0.01*PC, alpha_gw_crit=0.5, dadt_rchar=None, 
+                 r_gw_crit_9=1e3, alpha_gw_crit=0.5, dadt_rchar=None, 
                  inner_time=None,
                  inner_model_type=0):
         """Initialize a `FixedOuterTime_InnerPL_SAM` instance using a provided `Semi_Analytic_Model` instance.
