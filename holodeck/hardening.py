@@ -1477,8 +1477,8 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
     ENFORCE_SPEED_LIMIT = False
 
     def __init__(self, sam, num_steps=300, outer_time=1.0*GYR, rchar=100.0*PC, 
-                 gamma_inner=-1.0, x_gw_crit=1e3, gw_crit_units='rg',
-                 r_gw_crit_9=1e3, alpha_gw_crit=0.5, dadt_rchar=None, 
+                 gamma_inner=-1.0, gw_crit_units='rg', r_gw_crit_9=1e3, 
+                 alpha_gw_crit=0.5, dadt_rchar=None, 
                  inner_time=None,
                  inner_model_type=0):
         """Initialize a `FixedOuterTime_InnerPL_SAM` instance using a provided `Semi_Analytic_Model` instance.
@@ -1516,43 +1516,27 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
         #        print(f"Using {fgw_char=} as starting freq for inner inspiral (assuming circular orbits).")
 
         if inner_model_type == 0:
-            # set inner hardening using gamma_inner and x_gw_crit
-            assert (gamma_inner is not None and x_gw_crit is not None 
-                    and dadt_rchar is None and r_gw_crit_9 is None 
-                    and alpha_gw_crit is None and inner_time is None)
-            
-        elif inner_model_type == 1:
-            # set inner hardening using dadt_rchar and x_gw_crit
-            assert (dadt_rchar is not None and x_gw_crit is not None
-                    and gamma_inner is None and r_gw_crit_9 is None 
-                    and alpha_gw_crit is None and inner_time is None) 
-
-        elif inner_model_type == 2:
             # set inner hardening using gamma_inner, r_gw_crit_9, and alpha_gw_crit
             assert (gamma_inner is not None and r_gw_crit_9 is not None and alpha_gw_crit is not None
-                    and dadt_rchar is None and x_gw_crit is None
-                    and inner_time is None) 
-
-        elif inner_model_type == 3:
-            # set inner hardening using dadt_rchar and gamma inner
-            assert (dadt_rchar is not None and gamma_inner is not None 
-                    and x_gw_crit is None and r_gw_crit_9 is None 
-                    and alpha_gw_crit is None and inner_time is None)
-                        
-        elif inner_model_type == 4:
-            # set inner hardening using gamma_inner and inner_time
-            assert (gamma_inner is not None and inner_time is not None 
-                    and dadt_rchar is None and r_gw_crit_9 is None 
-                    and alpha_gw_crit is None)
+                    and dadt_rchar is None and inner_time is None) 
             
-        elif inner_model_type == 5:
+        elif inner_model_type == 1:
             # set inner hardening using dadt_rchar, r_gw_crit_9, and alpha_gw_crit
             assert (dadt_rchar is not None and r_gw_crit_9 is not None and alpha_gw_crit is not None
-                    and gamma_inner is None and x_gw_crit is None
-                    and inner_time is None) 
-            
+                    and gamma_inner is None and inner_time is None) 
+
+        elif inner_model_type == 2:
+            # set inner hardening using dadt_rchar and gamma inner
+            assert (dadt_rchar is not None and gamma_inner is not None 
+                    and r_gw_crit_9 is None and alpha_gw_crit is None and inner_time is None)
+                        
+        elif inner_model_type == 3:
+            # set inner hardening using gamma_inner and inner_time
+            assert (gamma_inner is not None and inner_time is not None 
+                    and dadt_rchar is None and r_gw_crit_9 is None and alpha_gw_crit is None)
+                        
         else:
-            raise ValueError(f"Invalid {inner_model_type=}. Valid model flags are 0 - 5.")
+            raise ValueError(f"Invalid {inner_model_type=}. Valid model flags are 0 - 3.")
             
         
         self._inner_model_type = inner_model_type    
@@ -1561,28 +1545,24 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
         #### self._fgw_char = fgw_char --- i dont think this is how we should do it after all
         self._rchar = rchar    #### instead let's let this be input in units of pc or rg
         
-        if self._inner_model_type != 1 and self._inner_model_type != 5:
+        if self._inner_model_type != 1:
             assert np.ndim(gamma_inner) == 0
             self._gamma_inner = gamma_inner
             
-        if self._inner_model_type == 0 or self._inner_model_type == 1:
-            assert np.ndim(x_gw_crit) == 0
-            self._x_gw_crit = x_gw_crit    #### defined in units of rg or pc based on `gw_crit_units`
-
-        if self._inner_model_type == 2 or self._inner_model_type == 5:
+        if self._inner_model_type in (0,1):
             assert np.ndim(r_gw_crit_9) == 0
             assert np.ndim(alpha_gw_crit) == 0
             self._r_gw_crit_9 = r_gw_crit_9    #### defined in units of rg or pc based on `gw_crit_units`
             self._alpha_gw_crit = alpha_gw_crit   #### determines mass scaling of r_gw_crit
 
-        if self._inner_model_type != 3 and self._inner_model_type != 4:
+        if self._inner_model_type < 2:
             assert gw_crit_units in ('pc','rg')
             self._gw_crit_units = gw_crit_units 
 
-        if self._inner_model_type % 2 == 1:
+        if self._inner_model_type in (1,2):
             self._dadt_rchar = dadt_rchar   ## i guess this will be in cm/s?
             
-        if self._inner_model_type == 4:
+        if self._inner_model_type == 3:
             self._inner_time = inner_time
             
         #mtot, mrat = np.meshgrid(sam.mtot, sam.mrat, indexing='ij')
@@ -1665,6 +1645,7 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
         #    radii[:, np.newaxis, np.newaxis, :]
         #)
 
+        print(f"*** {_sepa.max()=}  {_sepa.min()=} ***")
         m1, m2 = utils.m1m2_from_mtmr(_mtot, _mrat)
         print(f"{m1.shape=} {m2.shape=} {_mtot.shape=} {_mrat.shape=} {_mtot.shape=}")
 
@@ -1673,48 +1654,52 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
         dadt_gw = utils.gw_hardening_rate_dadt(m1, m2, _sepa)
 
         if self._inner_model_type == 0:
-            # set inner hardening using nu_inner and x_gw_crit (in units of rg or pc) (initial idea for new model)
-            
-            # (M,) in units of gravitational radius rg = G*M/c^2, or scalar in units of PC
+            # set inner hardening using nu_inner, r_gw_crit_9 (in units of rg or pc), and alpha_gw_crit
+            # alpha_gw_crit = 0 corresponds to no mass dependence of r_gw_crit in units of Rg
+            # alpha_gw_crit = -1 corresponds to no mass dependence of r_gw_crit in units of pc
+
+            m9 = _mtot / (1.0e9*MSOL)
             if self._gw_crit_units == 'rg':
-                rgw_crit = self._x_gw_crit * utils.gravitational_radius(_mtot)
-                print(f"{rgw_crit.shape=} {rgw_crit.min()=} Rg {rgw_crit.max()=} Rg")
+                r9 = self._r_gw_crit_9 * utils.gravitational_radius(1.0e9*MSOL) # convert to pc
             else:
-                rgw_crit = self._x_gw_crit * PC
-                print(f"{rgw_crit=} pc")
+                r9 = self._r_gw_crit_9 * PC # convert to pc
                 
+            rgw_crit = r9 * m9**(self._alpha_gw_crit+1)
+            print(f"{rgw_crit.shape=} {rgw_crit.min()=} {rgw_crit.max()=} pc")
+
             if np.any((rgw_crit>self._rchar)):
-                raise ValueError("all elements of rmax must be > rgw_crit.")
+                raise ValueError(f"all elements of rchar must be > rgw_crit. ({rgw_crit.max()=}, {self._rchar=}")
+
+            #r9 = self._r_gw_crit_9 * utils.gravitational_radius(_mtot) 
+            #rgw_crit = r9 * (_mtot / (1.0e9*MSOL))**(self._alpha_gw_crit-1)
+            #else:
+            #rgw_crit = self._r_gw_crit_9 * PC * m9**(self._alpha_gw_crit+1)
+            #print(f"{rgw_crit.shape=} {rgw_crit.min()=} {rgw_crit.max()=} pc")
 
             dadt_gw_crit = utils.gw_hardening_rate_dadt(m1, m2, rgw_crit)
             print(f"{dadt_gw_crit.shape=}")
 
             # "inner" PL hardening rate
             dadt_vals = dadt_gw_crit * ( _sepa / rgw_crit ) ** (1.0-self._gamma_inner)
-        
+                
         elif self._inner_model_type == 1:
-            # set inner hardening using dadt_rchar and x_gw_crit (in units of rg or pc) 
-            # (newer idea, possible physical issues with x_gw_crit (in either rg or pc) fixed instead of scaling with mass,
-            # but does avoid superluminal hardening by setting dadt_rchar)
+            # set inner hardening using dadt_rchar, r_gw_crit_9 (in units of rg or pc), and alpha_gw_crit
+            # naturally avoids superluminal hardening by setting dadt_rchar)
 
+            m9 = _mtot / (1.0e9*MSOL)
             if self._gw_crit_units == 'rg':
-                rgw_crit = self._x_gw_crit * utils.gravitational_radius(_mtot)
-                print(f"{rgw_crit.shape=} {rgw_crit.min()=} Rg {rgw_crit.max()=} Rg")
+                r9 = self._r_gw_crit_9 * utils.gravitational_radius(1.0e9*MSOL) # convert to pc
             else:
-                rgw_crit = self._x_gw_crit * PC
-                print(f"{rgw_crit=} pc")
+                r9 = self._r_gw_crit_9 * PC # convert to pc
+                
+            rgw_crit = r9 * m9**(self._alpha_gw_crit+1)
+            print(f"{rgw_crit.shape=} {rgw_crit.min()=} {rgw_crit.max()=} pc")
 
             if np.any((rgw_crit>self._rchar)):
-                raise ValueError("all elements of rmax must be > rgw_crit.")
+                raise ValueError(f"all elements of rchar must be > rgw_crit. ({rgw_crit.max()=}, {self._rchar=}")
 
             dadt_gw_crit = utils.gw_hardening_rate_dadt(m1, m2, rgw_crit)
             print(f"{dadt_gw_crit.shape=}")
-
-            ##TESTING ONLY
-            #vorb_rchar = np.sqrt( NWTG * m1*m2 / _mtot / self._rchar )
-            #print(f"{_mtot.min()/MSOL=} {_mtot.max()/MSOL=}")
-            #print(f"{vorb_rchar.min()=} {vorb_rchar.max()=}")
-            #dadt_rchar_scaled = - self._dadt_rchar * vorb_rchar
 
             nu_inner = 1 - ( np.log(-dadt_gw_crit) - np.log(-self._dadt_rchar) ) / ( np.log(rgw_crit) - np.log(self._rchar) )
             print(f"{self._dadt_rchar=} {self._rchar=}")
@@ -1726,63 +1711,17 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
 
             # "inner" PL hardening rate
             dadt_vals = dadt_gw_crit * ( _sepa / rgw_crit ) ** (1.0-nu_inner)
-
-        elif self._inner_model_type == 2:
-            # set inner hardening using gamma_inner, r_gw_crit_9 (units rg or pc??) & alpha_gw_crit (most physically motivated model??)
-
-            if self._gw_crit_units == 'rg':
-                r9 = self._r_gw_crit_9 * utils.gravitational_radius(_mtot) 
-                # TO DO: double check that the normalization to 1e9 msun is being used self-consistently
-                rgw_crit = r9 * (_mtot / (1.0e9*MSOL))**(self._alpha_gw_crit-1)
-                print(f"{rgw_crit.shape=} {rgw_crit.min()=} Rg {rgw_crit.max()=} Rg")
-
-            else:
-                rgw_crit = self._r_gw_crit_9 * PC * (_mtot / (1.0e9*MSOL))**self._alpha_gw_crit
-                print(f"{rgw_crit.shape=} {rgw_crit.min()=} {rgw_crit.max()=} pc")
-
-            dadt_gw_crit = utils.gw_hardening_rate_dadt(m1, m2, rgw_crit)
-            print(f"{dadt_gw_crit.shape=}")
-
-            # "inner" PL hardening rate
-            dadt_vals = dadt_gw_crit * ( _sepa / rgw_crit ) ** (1.0-self._gamma_inner)
         
-        elif self._inner_model_type == 3:
+        elif self._inner_model_type == 2:
             # set inner hardening using dadt_rchar and gamma_inner (lowest priority for testing)
             raise NotImplementedError()
 
-        elif self._inner_model_type == 4:
+        elif self._inner_model_type == 3:
             # set inner hardening using gamma_inner and inner_time (closest analogue to old model)
             raise NotImplementedError()
             
-        elif self._inner_model_type == 5:
-            # set inner hardening using dadt_rchar, r_gw_crit_9 (units rg or pc??) & alpha_gw_crit 
-
-            if self._gw_crit_units == 'rg':
-                r9 = self._r_gw_crit_9 * utils.gravitational_radius(_mtot) 
-                rgw_crit = r9 * (_mtot / (1.0e9*MSOL))**(self._alpha_gw_crit-1)
-                print(f"{rgw_crit.shape=} {rgw_crit.min()=} Rg {rgw_crit.max()=} Rg")
-
-            else:
-                rgw_crit = self._r_gw_crit_9 * PC * (_mtot / (1.0e9*MSOL))**self._alpha_gw_crit
-                print(f"{rgw_crit.shape=} {rgw_crit.min()=} {rgw_crit.max()=} pc")
-
-            dadt_gw_crit = utils.gw_hardening_rate_dadt(m1, m2, rgw_crit)
-            print(f"{dadt_gw_crit.shape=}")
-
-            nu_inner = 1 - ( np.log(-dadt_gw_crit) - np.log(-self._dadt_rchar) ) / ( np.log(rgw_crit) - np.log(self._rchar) )
-            print(f"{self._dadt_rchar=} {self._rchar=}")
-            #nu_inner = 1 - ( np.log(-dadt_gw_crit) - np.log(-dadt_rchar_scaled) ) / ( np.log(rgw_crit) - np.log(self._rchar) )
-            #print(f"{dadt_rchar_scaled.min()=} {dadt_rchar_scaled.max()=} {self._dadt_rchar=} {self._rchar=}")
-            print(f"{dadt_gw_crit.min()=} {dadt_gw_crit.max()=}") 
-            print(f"{rgw_crit.min()=} {rgw_crit.max()=}")
-            print(f"{nu_inner.min()=} {nu_inner.max()=}")
-
-            # "inner" PL hardening rate
-            dadt_vals = dadt_gw_crit * ( _sepa / rgw_crit ) ** (1.0-nu_inner)
-        
-
         else:
-            raise ValueError(f"{self._inner_model_type=} not defined. valid values are 0-5.")
+            raise ValueError(f"{self._inner_model_type=} not defined. valid values are 0-3.")
 
         
         dadt_vals += dadt_gw
