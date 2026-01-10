@@ -40,7 +40,7 @@ cdef double MY_GYR = MY_YR * 1.0e9
 cdef double KEPLER_CONST_FREQ = (1.0 / (2.0*M_PI)) * sqrt(MY_NWTG)
 cdef double KEPLER_CONST_SEPA = pow(MY_NWTG, 1.0/3.0) / pow(2.0*M_PI, 2.0/3.0)
 cdef double FOUR_PI_SPLC_OVER_MPC = 4 * M_PI * MY_SPLC / MY_MPC
-
+cdef double MY_RGRV = MY_NWTG / (MY_SPLC*MY_SPLC)
 
 @cython.cdivision(True)
 cpdef double hard_gw(double mtot, double mrat, double sepa):
@@ -224,9 +224,13 @@ cdef void _integrate_differential_number_3dx1d(
 
 
 @cython.cdivision(True)
-cdef double _hard_func_innerpwl_mod0(double mtot, double mrat, double sepa, double gamma_inner, double r9, double alpha_gwcrit):
+cdef double _hard_func_innerpwl(double mtot, double mrat, double sepa, int mod_type,
+                                double gamma_inner, double r9, double alpha_gwcrit):
 
-    cdef double r_gwcrit = r9 * pow(mtot/(1.0e9*MSOL), alpha_gwcrit+1)
+    if mod_type != 0:
+        raise ValueError(f"{mod_type=} not defined!")
+        
+    cdef double r_gwcrit = r9 * pow(mtot/(1.0e9*MY_MSOL), alpha_gwcrit+1)
     cdef double dadt = hard_gw(mtot, mrat, r_gwcrit) * pow(sepa/r_gwcrit, 1.0-gamma_inner)
     return dadt
 
@@ -239,16 +243,17 @@ cdef double _hard_func_innerpwl_gw(
 ):
     if inner_model_type == 0:
         if gwcrit_units_rg == 0:
-            r9 = r_gwcrit_9 * PC 
+            r9 = r_gwcrit_9 * MY_PC 
         else:
-            r9 = r_gwcrit_9 * RGRV * 1.0e9*MSOL
-        cdef double dadt = _hard_func_innerpwl(mtot, mrat, sepa, gamma_inner, r9, alpha_gwcrit)
+            r9 = r_gwcrit_9 * MY_RGRV * 1.0e9*MY_MSOL
     elif inner_model_type == 1:
         # TO DO
         raise NotImplementedError()
     else: 
         raise ValueError(f"{inner_model_type=} not defined!")
         
+    cdef double dadt = _hard_func_innerpwl(mtot, mrat, sepa, inner_model_type,
+                                           gamma_inner, r9, alpha_gwcrit)    
     dadt += hard_gw(mtot, mrat, sepa)
     return dadt
 
@@ -578,7 +583,7 @@ cdef int _dynamic_binary_number_at_fobs_innerpwl(
     double sepa_init,
     int num_steps,
 
-    double hard_inner_model_type,
+    int hard_inner_model_type,
     double hard_rchar,
     double hard_gamma_inner,  
     double hard_r_gwcrit_9,
@@ -648,7 +653,7 @@ cdef int _dynamic_binary_number_at_fobs_innerpwl(
     cdef double sepa_init_log10 = log10(sepa_init)
 
     cdef int ii, jj, kk, ff, step, interp_left_idx, interp_right_idx, new_interp_idx
-    cdef double mt, mr, norm, risco, dx, new_redz, gmt, ftarget, target_frst_orb
+    cdef double mt, mr, risco, dx, new_redz, gmt, ftarget, target_frst_orb
     cdef double sepa_log10, sepa, sepa_left, sepa_right, dadt_left, dadt_right
     cdef double time_evo, redz_left, redz_right, time_left, time_right, new_time
     cdef double frst_orb_left, fobs_orb_left, frst_orb_right, fobs_orb_right
@@ -683,7 +688,6 @@ cdef int _dynamic_binary_number_at_fobs_innerpwl(
             # Binary evolution is determined by M and q only
             # so integration is started for each of these bins
             sepa_log10 = sepa_init_log10                # set initial separation to initial value
-            norm = hard_norm[ii, jj]                    # get hardening-rate normalization for this bin
 
             # Get total hardening rate at left-most edge
             sepa_left = pow(10.0, sepa_log10)
