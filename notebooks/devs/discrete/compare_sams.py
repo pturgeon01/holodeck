@@ -44,13 +44,18 @@ else:
 
 class Test_SAM:
     
-    def __init__(self, model_type='old', nreals=10, nloud=5, gpf_flag=0,
+    def __init__(self, model_type='old', hard_type='fixed2PL',
+                 nreals=10, nloud=5, gpf_flag=0,
                  skip_evo=False, bfrac=None, 
                  hard_t=None, hard_ai=None, hard_rc=None, 
                  hard_nin=None, hard_nout=None, gsmf_flag = None,
                  mmbulge=None, var_value=None):
 
+        if hard_type not in ('fixed2PL','fixedOuter'):
+            raise ValueError(f"{hard_type=} note defined, must be 'fixed2PL' or 'fixedOuter'.")
+        
         self.model_type = model_type
+        self.hard_type = hard_type
         self.nreals = nreals
         self.nloud = nloud
         self.gpf_flag = gpf_flag
@@ -91,13 +96,26 @@ class Test_SAM:
 
         
         print(f"    ...calculating hardening for GPF SAM with {self.model_type=}")
-        self.hard = holo.hardening.Fixed_Time_2PL_SAM(self.sam, self.PARS['hard_time']*GYR, 
-                                                      sepa_init = self.PARS['hard_sepa_init']*PC,
-                                                      rchar = self.PARS['hard_rchar']*PC,
-                                                      gamma_inner = self.PARS['hard_gamma_inner'],
-                                                      gamma_outer = self.PARS['hard_gamma_outer'],
-                                                     )
-
+        if self.hard_type == 'fixed2PL':
+            self.hard = holo.hardening.Fixed_Time_2PL_SAM(self.sam, self.PARS['hard_time']*GYR, 
+                                                          sepa_init = self.PARS['hard_sepa_init']*PC,
+                                                          rchar = self.PARS['hard_rchar']*PC,
+                                                          gamma_inner = self.PARS['hard_gamma_inner'],
+                                                          gamma_outer = self.PARS['hard_gamma_outer'],
+                                                         )
+        else:
+            self.hard = holo.hardening.FixedOuterTime_InnerPL_SAM(self.sam, 
+                                                                  inner_model_type = self.PARS['hard_inner_model_type'],
+                                                                  outer_time = self.PARS['hard_outer_time']*GYR, 
+                                                                  rchar = self.PARS['hard_rchar']*PC,
+                                                                  gamma_inner = self.PARS['hard_gamma_inner'],
+                                                                  gw_crit_units= self.PARS['hard_gw_crit_units'],
+                                                                  r_gw_crit_9 = self.PARS['hard_r_gw_crit_9'],
+                                                                  alpha_gw_crit = self.PARS['hard_alpha_gw_crit'],
+                                                                  dadt_rchar = self.PARS['hard_dadt_rchar'],
+                                                                  inner_time = self.PARS['hard_inner_time']
+                                                                 )
+               
         ### ***NOTE*** gwb() allows for including pars of loud sources (unlike gwb_new()):
         print("    ...creating gwb for SAM")
         self.gwb_sam = self.sam.gwb(self.PARS['freqs_edges'], self.hard,
@@ -108,7 +126,7 @@ class Test_SAM:
             
     def set_sam_params_manual(self, tau=None, var_value=None):
 
-        if tau is None:
+        if tau is None and 'new_hardening' not in self.model_type:
             raise ValueError("must choose a numerical value of keyword tau (in Gyr)!")
         
         # ---- Define the GWB frequencies and other key model params
@@ -299,18 +317,97 @@ class Test_SAM:
                 hard_gamma_outer=+2.5,
                 gsmf = holo.sams.GSMF_Double_Schechter(log10_mstar=[+10.767, +0.124, var_value])
             )
-            
+        elif self.model_type == 'new_hardening_type0_toutvar':
+            # set inner hardening using gamma_inner, r_gw_crit_9, and alpha_gw_crit
+            self.PARS = dict(
+                desc='set inner hardening using gamma_inner, r_gw_crit_9, and alpha_gw_crit',
+                hard_inner_model_type=0,
+                hard_outer_time=var_value,     # [Gyr]
+                hard_rchar=100.0,        # [pc]
+                hard_gamma_inner=-1.0,
+                hard_gw_crit_units='rg',
+                hard_r_gw_crit_9=1e3, 
+                hard_alpha_gw_crit=-0.25, 
+                hard_dadt_rchar=None, 
+                hard_inner_time=None,
+                gsmf = holo.sams.GSMF_Double_Schechter()
+            )
+        elif self.model_type == 'new_hardening_type0_nuivar':
+            # set inner hardening using gamma_inner, r_gw_crit_9, and alpha_gw_crit
+            self.PARS = dict(
+                desc='set inner hardening using gamma_inner, r_gw_crit_9, and alpha_gw_crit',
+                hard_inner_model_type=0,
+                hard_outer_time=1.0,     # [Gyr]
+                hard_rchar=100.0,        # [pc]
+                hard_gamma_inner=var_value,
+                hard_gw_crit_units='rg',
+                hard_r_gw_crit_9=1e3, 
+                hard_alpha_gw_crit=-0.25, 
+                hard_dadt_rchar=None, 
+                hard_inner_time=None,
+                gsmf = holo.sams.GSMF_Double_Schechter()
+            )
+        elif self.model_type == 'new_hardening_type0_r9var':
+            # set inner hardening using gamma_inner, r_gw_crit_9, and alpha_gw_crit
+            self.PARS = dict(
+                desc='set inner hardening using gamma_inner, r_gw_crit_9, and alpha_gw_crit',
+                hard_inner_model_type=0,
+                hard_outer_time=1.0,     # [Gyr]
+                hard_rchar=100.0,        # [pc]
+                hard_gamma_inner=-1.0,
+                hard_gw_crit_units='rg',
+                hard_r_gw_crit_9=var_value, 
+                hard_alpha_gw_crit=-0.25, 
+                hard_dadt_rchar=None, 
+                hard_inner_time=None,
+                gsmf = holo.sams.GSMF_Double_Schechter()
+            )
+        elif self.model_type == 'new_hardening_type0_alphvar':
+            # set inner hardening using gamma_inner, r_gw_crit_9, and alpha_gw_crit
+            self.PARS = dict(
+                desc='set inner hardening using gamma_inner, r_gw_crit_9, and alpha_gw_crit',
+                hard_inner_model_type=0,
+                hard_outer_time=1.0,     # [Gyr]
+                hard_rchar=100.0,        # [pc]
+                hard_gamma_inner=-1.0,
+                hard_gw_crit_units='rg',
+                hard_r_gw_crit_9=1e3, 
+                hard_alpha_gw_crit=var_value, 
+                hard_dadt_rchar=None, 
+                hard_inner_time=None,
+                gsmf = holo.sams.GSMF_Double_Schechter()
+            )
+        elif self.model_type == 'new_hardening_type1':
+            # set inner hardening using dadt_rchar, r_gw_crit_9, and alpha_gw_crit
+            self.PARS = dict(
+                desc='set inner hardening using dadt_rchar, r_gw_crit_9, and alpha_gw_crit',
+                hard_inner_model_type=1,
+                hard_outer_time=1.0,     # [Gyr]
+                hard_rchar=100.0,        # [pc]
+                hard_dadt_rchar=-1.0e7,  # [cm/s]
+                hard_gw_crit_units='rg',
+                hard_r_gw_crit_9=1e3, 
+                hard_alpha_gw_crit=-0.25, 
+                hard_gamma_inner=None,
+                hard_inner_time=None,
+                gsmf = holo.sams.GSMF_Double_Schechter()                
+            )
+        
         else:
             modlist = ['old', 'old_2s', 'old_rc100', 'ph15', 'astr', 'astr_nuo0', 'astr_rc100',
                        'ph15_nuivar', 'ph15_muvar', 'ph15_epsmuvar', 'ph15_phivar', 'ph15_Mphivar',
                        'astr_rc100_nuivar', 'astr_rc100_muvar', 'astr_rc100_epsmuvar',
                        'astr_rc100_phi10var', 'astr_rc100_phi20var', 
-                       'astr_rc100_Mc0var', 'astr_rc100_Mc1var', 'astr_rc100_Mc2var']
+                       'astr_rc100_Mc0var', 'astr_rc100_Mc1var', 'astr_rc100_Mc2var',
+                       'new_hardening_type0_toutvar', 'new_hardening_type0_nuivar', 
+                       'new_hardening_type0_r9var', 'new_hardening_type0_alphvar', 
+                       'new_hardening_type1']
 
             raise ValueError(f"{self.model_type=} is not defined. Options are {[m for m in modlist]}.")
 
-        # define the fixed inspiral timescale from input keyword
-        self.PARS["hard_time"] = tau    # [Gyr]
+        if 'new_hardening' not in self.model_type:
+            # define the fixed inspiral timescale from input keyword
+            self.PARS["hard_time"] = tau    # [Gyr]
 
         # add other params that will stay the same between model types
         freqs, freqs_edges = utils.pta_freqs()
@@ -499,8 +596,6 @@ def create_sams(nreals=5, nloud=5, fpath=_PATH_DATA, suite_type='grid',
             pickle_name = suite_type
 
 
-
-
     elif suite_type == 'phenom15_varied':
         # varying tau, nu_inner, z=0 GSMF pars,  MMBulge pars 
         # fixed nu_outer, rchar, GSMF evol pars
@@ -513,6 +608,43 @@ def create_sams(nreals=5, nloud=5, fpath=_PATH_DATA, suite_type='grid',
         if gpfflag is not None:
             print(f"WARNING: overriding keyword {gpfflag=} for {suite_type=}. Setting to 1.")
         gpfflag = 1
+
+    elif 'new_hardening' in suite_type:
+
+        if gpfflag is not None:
+            print(f"WARNING: overriding keyword {gpfflag=} for {suite_type=}. Setting to 0.")
+        gpfflag = 0    
+        print(f'{gpfflag=}')
+        if tau is not None:
+            print(f'WARNING: overriding keyword {tau=}, setting to `None` for new hardening.')
+            tau = None
+            
+        varied_values = dict(
+            tout=[0.1, 1.0, 10.0],
+            nui=[-1.5, -1.0, -0.5, 0.0],
+            r9=[30, 100, 300, 1e3, 3e3],
+            alph=[-0.5, -1.0/3, -0.25, -0.1, 0.0]
+        )
+        
+        varName = [m for m in varied_values.keys() if m in suite_type]
+        if len(varName)==1:         
+            varName = varName[0]
+        else:
+            raise ValueError(f"No unique var name match found for {suite_type=} in {varied_values.keys()=}")
+            
+        for i in range(len(varied_values[varName])):
+            print(f'Creating test SAM for {suite_type=}, {varName=}, var_value={varied_values[varName][i]}.')
+            s = Test_SAM(model_type=suite_type, nreals=nreals, nloud=nloud, gpf_flag=gpfflag, 
+                         var_value=varied_values[varName][i], hard_t=tau, hard_type='fixedOuter')
+
+            all_sams = all_sams + [s]
+    
+        if pickle_sams and pickle_name is None:
+            pickle_name = suite_type
+
+    else:
+        raise ValueError(f"{suite_type=} not defined.")
+
     
     if pickle_sams:
         nfreqs = all_sams[0].PARS['freqs'].size
