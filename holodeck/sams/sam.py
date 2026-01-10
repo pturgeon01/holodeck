@@ -907,9 +907,11 @@ class Semi_Analytic_Model:
         """
         from . import sam_cyutils
 
-        if not isinstance(hard, (holo.hardening.Fixed_Time_2PL_SAM, holo.hardening.Hard_GW)):
+        if not isinstance(hard, (holo.hardening.Fixed_Time_2PL_SAM, holo.hardening.FixedOuterTime_InnerPL_SAM, 
+                                 holo.hardening.Hard_GW)):
             err = (
-                "`sam_cyutils` methods only work with `Fixed_Time_2PL_SAM` or `Hard_GW` hardening models!  "
+                "`sam_cyutils` methods only work with `Fixed_Time_2PL_SAM`, "
+                "`FixedOuterTime_InnerPL_SAM`, or `Hard_GW` hardening models!  "
                 "Use `gwb_only` for alternative classes!"
             )
             self._log.exception(err)
