@@ -505,9 +505,12 @@ def dynamic_binary_number_at_fobs(fobs_orb, sam, hard, cosmo):
     cdef np.ndarray[np.double_t, ndim=4] diff_num = np.zeros(shape)
     cdef np.ndarray[np.double_t, ndim=4] redz_final = -1.0 * np.ones(shape)
 
+    sam._log.info("checking class type of `hard`...")
+                  
     # ---- Fixed_Time_2pwl_SAM
 
     if isinstance(hard, holo.hardening.Fixed_Time_2PL_SAM):
+        sam._log.info("`hard` is instance of Fixed_Time_2PL_SAM")
         gmt_time = sam._gmt_time
         # if `sam` is using galaxy merger rate (GMR), then `gmt_time` will be `None`
         if gmt_time is None:
@@ -523,27 +526,10 @@ def dynamic_binary_number_at_fobs(fobs_orb, sam, hard, cosmo):
             redz_final, diff_num
         )
 
-    # ---- Hard_GW
-
-    elif isinstance(hard, holo.hardening.Hard_GW) or issubclass(hard, holo.hardening.Hard_GW):
-        redz_prime = sam._redz_prime
-        # if `sam` doesn't use a galaxy merger time (GMT), then `redz_prime` will be `None`,
-        # set to initial redshift values instead
-        if redz_prime is None:
-            sam._log.info("`redz_prime` not calculated in SAM.  Setting to `redz` (initial) values.")
-            redz_prime = sam.redz[np.newaxis, np.newaxis, :] * np.ones(sam.shape)
-
-        _dynamic_binary_number_at_fobs_gw(
-            fobs_orb,
-            nden, sam.mtot, sam.mrat, sam.redz, redz_prime,
-            cosmo._grid_z, cosmo._grid_dcom,
-            # output:
-            redz_final, diff_num
-        )
-
     # ---- FixedOuterTime_InnerPL_SAM
 
     elif isinstance(hard, holo.hardening.FixedOuterTime_InnerPL_SAM):
+        sam._log.info("`hard` is instance of FixedOuterTime_InnerPL_SAM")
         gmt_time = sam._gmt_time
         # if `sam` is using galaxy merger rate (GMR), then `gmt_time` will be `None`
         if gmt_time is None:
@@ -561,6 +547,25 @@ def dynamic_binary_number_at_fobs(fobs_orb, sam, hard, cosmo):
             hard._r_gw_crit_9, hard_gwcrit_units_rg, hard._alpha_gw_crit,
             nden, sam.mtot, sam.mrat, sam.redz, gmt_time,
             cosmo._grid_z, cosmo._grid_dcom, cosmo._grid_age,
+            # output:
+            redz_final, diff_num
+        )
+        
+    # ---- Hard_GW
+
+    elif isinstance(hard, holo.hardening.Hard_GW) or issubclass(hard, holo.hardening.Hard_GW):
+        sam._log.info("`hard` is instance or subclass of Hard_GW")
+        redz_prime = sam._redz_prime
+        # if `sam` doesn't use a galaxy merger time (GMT), then `redz_prime` will be `None`,
+        # set to initial redshift values instead
+        if redz_prime is None:
+            sam._log.info("`redz_prime` not calculated in SAM.  Setting to `redz` (initial) values.")
+            redz_prime = sam.redz[np.newaxis, np.newaxis, :] * np.ones(sam.shape)
+
+        _dynamic_binary_number_at_fobs_gw(
+            fobs_orb,
+            nden, sam.mtot, sam.mrat, sam.redz, redz_prime,
+            cosmo._grid_z, cosmo._grid_dcom,
             # output:
             redz_final, diff_num
         )
@@ -608,8 +613,8 @@ cdef int _dynamic_binary_number_at_fobs_innerpwl(
 
     This function converts from differential binary volume-density to differential binary number.
     Binary evolution follows the 'phenomenological' double power-law model implemented in the
-    :py:func:`_hard_func_2pwl_gw`, which matches the implementation in
-    :py:class:`Fixed_Time_2PL_SAM`.
+    :py:func:`_hard_func_innerpwl_gw`, which matches the implementation in
+    :py:class:`FixedOuterTime_InnerPL_SAM`.
 
     See :py:func:`dynamic_binary_number_at_fobs` for more information.
 
