@@ -1587,7 +1587,7 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
             f"{super().__str__()} :: "
             f"outer_time/Gyr={self._outer_time/GYR:.2e} num_steps={self._num_steps} "
             f"rchar/pc={self._rchar/PC:.2e} "
-            f"gamma_inner={self._gamma_inner:.2e} rgw_norm={self._x_gwcrit:.2e} "
+            f"gamma_inner={self._gamma_inner:.2e} "
         )
         return msg
 
