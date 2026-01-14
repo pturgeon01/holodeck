@@ -818,7 +818,58 @@ class PS_Astro_Strong_ECG_14(_PS_Astro_Strong):
         self.DEFAULTS['hard_rchar'] = 100.0
         self.DEFAULTS['hard_nu_outer'] = 2.5
         return
-    
+class PS_Astro_Strong_ECG_15(_PS_Astro_Strong):
+
+    def __init__(self, log=None, nsamples=None, sam_shape=None, seed=None):
+        parameters = [
+            # Hardening model (phenom 2PL)
+            PD_Uniform("hard_time", 0.1, 11.0, default=3.0),   # [Gyr]
+            PD_Uniform("hard_gamma_inner", -2.0, +0.0, default=-1.0),
+            # PD_Uniform("hard_rchar", 2.0, 20.0, default=10.0),    # [pc]
+
+            # GSMF
+            PD_Normal('gsmf_log10_phi_one_z0', -2.383, 0.028),    # - 2.383 ± 0.028
+            PD_Normal('gsmf_log10_phi_one_z1', -0.264, 0.072),    # - 0.264 ± 0.072
+            PD_Normal('gsmf_log10_phi_one_z2', -0.107, 0.031),    # - 0.107 ± 0.031
+            PD_Normal('gsmf_log10_phi_two_z0', -2.818, 0.050),    # - 2.818 ± 0.050
+            PD_Normal('gsmf_log10_phi_two_z1', -0.368, 0.070),    # - 0.368 ± 0.070
+            PD_Normal('gsmf_log10_phi_two_z2', +0.046, 0.020),    # + 0.046 ± 0.020
+            PD_Normal('gsmf_log10_mstar_z0', +10.767, 0.026),     # +10.767 ± 0.026
+            PD_Normal('gsmf_log10_mstar_z1', +0.124, 0.045),      # + 0.124 ± 0.045
+            PD_Normal('gsmf_log10_mstar_z2', -0.033, 0.015),      # - 0.033 ± 0.015
+            PD_Normal('gsmf_alpha_one', -0.28, 0.070),            # - 0.280 ± 0.070
+            PD_Normal('gsmf_alpha_two', -1.48, 0.150),            # - 1.480 ± 0.150
+
+            # GMR
+            PD_Normal('gmr_norm0_log10', -2.2287, 0.0045),        # -2.2287 ± 0.0045    A0 [log10(A*Gyr)]
+            PD_Normal('gmr_normz', +2.4644, 0.0128),              # +2.4644 ± 0.0128    eta
+            PD_Normal('gmr_malpha0', +0.2241, 0.0038),            # +0.2241 ± 0.0038    alpha0
+            PD_Normal('gmr_malphaz', -1.1759, 0.0316),            # -1.1759 ± 0.0316    alpha1
+            PD_Normal('gmr_mdelta0', +0.7668, 0.0202),            # +0.7668 ± 0.0202    delta0
+            PD_Normal('gmr_mdeltaz', -0.4695, 0.0440),            # -0.4695 ± 0.0440    delta1
+            PD_Normal('gmr_qgamma0', -1.2595, 0.0026),            # -1.2595 ± 0.0026    beta0
+            PD_Normal('gmr_qgammaz', +0.0611, 0.0021),            # +0.0611 ± 0.0021    beta1
+            PD_Normal('gmr_qgammam', -0.0477, 0.0013),            # -0.0477 ± 0.0013    gamma
+
+            # MMBulge
+            # From [KH2013]_
+            PD_Normal('mmb_mamp_log10', 8.69, 0.05),              # 8.69 ± 0.05  [log10(M/Msol)]
+            PD_Normal('mmb_plaw', 1.17, 0.08),                    # 1.17 ± 0.08
+            # Extra
+            PD_Normal('mmb_scatter_dex', 0.28, 0.05),             # no uncertainties given
+            PD_Uniform('bf_frac_lo', 0.1, 0.4),
+            PD_Uniform('bf_frac_hi', 0.6, 1.0),
+            PD_Uniform('bf_width_dex', 0.5, 1.5),                 # [dex]
+        ]
+        _Param_Space.__init__(
+            self, parameters,
+            log=log, nsamples=nsamples, sam_shape=sam_shape, seed=seed,
+        )
+
+        self.DEFAULTS['hard_rchar'] = 10.0
+        self.DEFAULTS['hard_nu_outer'] = 0.0
+        return
+       
 _param_spaces_dict = {
     'PS_Test': PS_Test,
     'PS_Astro_Strong_All': PS_Astro_Strong_All,
@@ -835,4 +886,5 @@ _param_spaces_dict = {
     'PS_Astro_Strong_ECG_12': PS_Astro_Strong_ECG_12,
     'PS_Astro_Strong_ECG_13': PS_Astro_Strong_ECG_13,
     'PS_Astro_Strong_ECG_14': PS_Astro_Strong_ECG_14,
+    'PS_Astro_Strong_ECG_15': PS_Astro_Strong_ECG_15,
 }
