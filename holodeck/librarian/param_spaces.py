@@ -818,6 +818,8 @@ class PS_Astro_Strong_ECG_14(_PS_Astro_Strong):
         self.DEFAULTS['hard_rchar'] = 100.0
         self.DEFAULTS['hard_nu_outer'] = 2.5
         return
+    
+    
 class PS_Astro_Strong_ECG_15(_PS_Astro_Strong):
 
     def __init__(self, log=None, nsamples=None, sam_shape=None, seed=None):
@@ -866,10 +868,38 @@ class PS_Astro_Strong_ECG_15(_PS_Astro_Strong):
             log=log, nsamples=nsamples, sam_shape=sam_shape, seed=seed,
         )
 
-        self.DEFAULTS['hard_rchar'] = 10.0
+        self.DEFAULTS['hard_rchar'] = 100.0
         self.DEFAULTS['hard_nu_outer'] = 0.0
         return
        
+class PS_Astro_Strong_ECG_17(_PS_Astro_Strong):
+
+    def __init__(self, log=None, nsamples=None, sam_shape=None, seed=None):
+        parameters = [
+            # Hardening model (phenom 2PL)
+            PD_Uniform("hard_time", 0.1, 11.0, default=3.0),   # [Gyr]
+            PD_Uniform("hard_gamma_inner", -2.0, +0.0, default=-1.0),
+            # PD_Uniform("hard_rchar", 2.0, 20.0, default=10.0),    # [pc]
+
+            # GSMF
+            PD_Normal('gsmf_log10_phi_one_z0', -2.383, 0.028),    # - 2.383 ± 0.028
+            PD_Normal('gsmf_log10_mstar_z0', +10.767, 0.026),     # +10.767 ± 0.026
+            PD_Normal('gsmf_log10_mstar_z1', +0.124, 0.045),      # + 0.124 ± 0.045
+
+            # MMBulge
+            PD_Normal('mmb_scatter_dex', 0.28, 0.05),             # no uncertainties given
+            
+        ]
+        _Param_Space.__init__(
+            self, parameters,
+            log=log, nsamples=nsamples, sam_shape=sam_shape, seed=seed,
+        )
+
+        self.DEFAULTS['hard_rchar'] = 100.0
+        self.DEFAULTS['hard_nu_outer'] = 0.0
+        return
+    
+
 _param_spaces_dict = {
     'PS_Test': PS_Test,
     'PS_Astro_Strong_All': PS_Astro_Strong_All,
@@ -887,4 +917,5 @@ _param_spaces_dict = {
     'PS_Astro_Strong_ECG_13': PS_Astro_Strong_ECG_13,
     'PS_Astro_Strong_ECG_14': PS_Astro_Strong_ECG_14,
     'PS_Astro_Strong_ECG_15': PS_Astro_Strong_ECG_15,
+    'PS_Astro_Strong_ECG_17': PS_Astro_Strong_ECG_17,
 }
