@@ -228,7 +228,7 @@ cdef double _hard_func_innerpwl(double mtot, double mrat, double sepa, int mod_t
                                 double gamma_inner, double r9, double alpha_gwcrit):
 
     if mod_type != 0:
-        raise ValueError(f"{mod_type=} not defined!")
+        raise ValueError(f"mod_type not defined: ", mod_type)
         
     cdef double r_gwcrit = r9 * pow(mtot/(1.0e9*MY_MSOL), alpha_gwcrit+1)
     cdef double dadt = hard_gw(mtot, mrat, r_gwcrit) * pow(sepa/r_gwcrit, 1.0-gamma_inner)
@@ -250,7 +250,7 @@ cdef double _hard_func_innerpwl_gw(
         # TO DO
         raise NotImplementedError()
     else: 
-        raise ValueError(f"{inner_model_type=} not defined!")
+        raise ValueError(f"inner_model_type not defined: ", inner_model_type)
         
     cdef double dadt = _hard_func_innerpwl(mtot, mrat, sepa, inner_model_type,
                                            gamma_inner, r9, alpha_gwcrit)    
@@ -542,7 +542,7 @@ def dynamic_binary_number_at_fobs(fobs_orb, sam, hard, cosmo):
             hard_gwcrit_units_rg = 0
             
         _dynamic_binary_number_at_fobs_innerpwl(
-            fobs_orb, hard._sepa_init, hard._num_steps,
+            fobs_orb, hard._num_steps, hard._outer_time, 
             hard._inner_model_type, hard._rchar, hard._gamma_inner,  
             hard._r_gw_crit_9, hard_gwcrit_units_rg, hard._alpha_gw_crit,
             nden, sam.mtot, sam.mrat, sam.redz, gmt_time,
@@ -585,9 +585,9 @@ def dynamic_binary_number_at_fobs(fobs_orb, sam, hard, cosmo):
 @cython.cdivision(True)
 cdef int _dynamic_binary_number_at_fobs_innerpwl(
     double[:] target_fobs_orb,
-    double sepa_init,
     int num_steps,
 
+    double hard_outer_time,
     int hard_inner_model_type,
     double hard_rchar,
     double hard_gamma_inner,  
@@ -655,7 +655,8 @@ cdef int _dynamic_binary_number_at_fobs_innerpwl(
     cdef int n_freq = target_fobs_orb.size
     cdef int n_interp = redz_interp_grid.size
     cdef double age_universe = tage_interp_grid[n_interp - 1]
-    cdef double sepa_init_log10 = log10(sepa_init)
+    # note: sepa_init not defined for this hardening model; hardening tracked only below hard_rchar
+    cdef double hard_rchar_log10 = log10(hard_rchar)
 
     cdef int ii, jj, kk, ff, step, interp_left_idx, interp_right_idx, new_interp_idx
     cdef double mt, mr, risco, dx, new_redz, gmt, ftarget, target_frst_orb
@@ -683,16 +684,16 @@ cdef int _dynamic_binary_number_at_fobs_innerpwl(
     for ii in range(n_mtot):
         mt = mtot[ii]
 
-        # Determine separation step-size, in log10-space, to integrate from sepa_init to ISCO
+        # Determine separation step-size, in log10-space, to integrate from hard_rchar to ISCO
         risco = 3.0 * MY_SCHW * mt     # ISCO is 3x combined schwarzschild radius
-        dx = (sepa_init_log10 - log10(risco)) / num_steps
+        dx = (hard_rchar_log10 - log10(risco)) / num_steps
 
         for jj in range(n_mrat):
             mr = mrat[jj]
 
             # Binary evolution is determined by M and q only
             # so integration is started for each of these bins
-            sepa_log10 = sepa_init_log10                # set initial separation to initial value
+            sepa_log10 = hard_rchar_log10                # set initial separation to initial value
 
             # Get total hardening rate at left-most edge
             sepa_left = pow(10.0, sepa_log10)
@@ -735,9 +736,9 @@ cdef int _dynamic_binary_number_at_fobs_innerpwl(
                 # ---- Iterate over starting redshift bins
 
                 for kk in range(n_redz-1, -1, -1):
-                    # get the total time from each starting redshift, plus GMT time, plus evolution time to this step
+                    # get the total time from each starting redshift, plus GMT time, plus outer time, plus evolution time to this step
                     gmt = gmt_time[ii, jj, kk]
-                    time_right = time_evo + gmt + redz_age[kk]
+                    time_right = time_evo + gmt + hard_outer_time + redz_age[kk]
                     # also get the evolution-time to the left edge
                     time_left = time_right - dt
 
@@ -836,7 +837,7 @@ cdef int _dynamic_binary_number_at_fobs_innerpwl(
                         sepa = kepler_sepa_from_freq(mt, target_frst_orb)
 
                         # calculate total hardening rate at this exact separation
-                        #### CHANGE THIS: ####
+                        #### UPDATED TO NEW FUNCTION ####
                         dadt =  _hard_func_innerpwl_gw(
                             mt, mr, sepa, 
                             hard_inner_model_type, hard_rchar, hard_gamma_inner, 
