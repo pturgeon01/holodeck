@@ -712,7 +712,7 @@ class PS_Astro_Strong_ECG_12(_PS_Astro_Strong):
         )
 
         self.DEFAULTS['hard_rchar'] = 10.0
-        self.DEFAULTS['hard_nu_outer'] = 0.0
+        self.DEFAULTS['hard_gamma_outer'] = 0.0
         return
  
 class PS_Astro_Strong_ECG_13(_PS_Astro_Strong):
@@ -764,7 +764,7 @@ class PS_Astro_Strong_ECG_13(_PS_Astro_Strong):
         )
 
         self.DEFAULTS['hard_rchar'] = 10.0
-        self.DEFAULTS['hard_nu_outer'] = 2.5
+        # self.DEFAULTS['hard_gamma_outer'] = 2.5 # inherited from astro_strong as 2.5
         return
     
 class PS_Astro_Strong_ECG_14(_PS_Astro_Strong):
@@ -816,7 +816,7 @@ class PS_Astro_Strong_ECG_14(_PS_Astro_Strong):
         )
 
         self.DEFAULTS['hard_rchar'] = 100.0
-        self.DEFAULTS['hard_nu_outer'] = 2.5
+        # self.DEFAULTS['hard_gamma_outer'] = 2.5 # defaults to 2.5
         return
     
     
@@ -869,7 +869,7 @@ class PS_Astro_Strong_ECG_15(_PS_Astro_Strong):
         )
 
         self.DEFAULTS['hard_rchar'] = 100.0
-        self.DEFAULTS['hard_nu_outer'] = 0.0
+        self.DEFAULTS['hard_gamma_outer'] = 0.0
         return
        
 class PS_Astro_Strong_ECG_17(_PS_Astro_Strong):
