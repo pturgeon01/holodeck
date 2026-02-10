@@ -665,6 +665,12 @@ class PS_Astro_Strong_ECG_03(_Param_Space):
     
 class PS_Astro_Strong_ECG_12(_PS_Astro_Strong):
 
+    DEFAULTS = {
+        **_PS_Astro_Strong.DEFAULTS,
+        "hard_gamma_outer": 0.0,
+        "hard_rchar": 10.0,
+    }
+
     def __init__(self, log=None, nsamples=None, sam_shape=None, seed=None):
         parameters = [
             # Hardening model (phenom 2PL)
@@ -711,12 +717,16 @@ class PS_Astro_Strong_ECG_12(_PS_Astro_Strong):
             log=log, nsamples=nsamples, sam_shape=sam_shape, seed=seed,
         )
 
-        self.DEFAULTS['hard_rchar'] = 10.0
-        self.DEFAULTS['hard_gamma_outer'] = 0.0
         return
  
 class PS_Astro_Strong_ECG_13(_PS_Astro_Strong):
 
+    DEFAULTS = {
+        **_PS_Astro_Strong.DEFAULTS,
+        "hard_gamma_outer": 2.5,
+        "hard_rchar": 10.0,
+    }
+
     def __init__(self, log=None, nsamples=None, sam_shape=None, seed=None):
         parameters = [
             # Hardening model (phenom 2PL)
@@ -763,11 +773,18 @@ class PS_Astro_Strong_ECG_13(_PS_Astro_Strong):
             log=log, nsamples=nsamples, sam_shape=sam_shape, seed=seed,
         )
 
-        self.DEFAULTS['hard_rchar'] = 10.0
+        # self.DEFAULTS['hard_rchar'] = 10.0
         # self.DEFAULTS['hard_gamma_outer'] = 2.5 # inherited from astro_strong as 2.5
         return
     
 class PS_Astro_Strong_ECG_14(_PS_Astro_Strong):
+
+
+    DEFAULTS = {
+        **_PS_Astro_Strong.DEFAULTS,
+        "hard_gamma_outer": 2.5,
+        "hard_rchar": 100.0,
+    }
 
     def __init__(self, log=None, nsamples=None, sam_shape=None, seed=None):
         parameters = [
@@ -822,6 +839,13 @@ class PS_Astro_Strong_ECG_14(_PS_Astro_Strong):
     
 class PS_Astro_Strong_ECG_15(_PS_Astro_Strong):
 
+
+    DEFAULTS = {
+        **_PS_Astro_Strong.DEFAULTS,
+        "hard_gamma_outer": 0.0,
+        "hard_rchar": 100.0,
+    }
+    
     def __init__(self, log=None, nsamples=None, sam_shape=None, seed=None):
         parameters = [
             # Hardening model (phenom 2PL)
@@ -868,8 +892,8 @@ class PS_Astro_Strong_ECG_15(_PS_Astro_Strong):
             log=log, nsamples=nsamples, sam_shape=sam_shape, seed=seed,
         )
 
-        self.DEFAULTS['hard_rchar'] = 100.0
-        self.DEFAULTS['hard_gamma_outer'] = 0.0
+        # self.DEFAULTS['hard_rchar'] = 100.0
+        # self.DEFAULTS['hard_gamma_outer'] = 0.0
         return
        
 class PS_Astro_Strong_ECG_17(_PS_Astro_Strong):
