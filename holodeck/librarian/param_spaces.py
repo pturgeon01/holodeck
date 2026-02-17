@@ -897,7 +897,7 @@ class PS_Astro_Strong_ECG_15(_PS_Astro_Strong):
         return
 
 
-class PS_Astro_Strong_ECG17(_Param_Space):
+class PS_Astro_Strong_ECG_17(_Param_Space):
     """SAM Model with strongly astrophysically-motivated parameters, in the exact state of PS_Astro_Strong_Hard_All(_PS_Astro_Strong) on 2024_10_25
 
     This model uses a double-Schechter GSMF, an Illustris-derived galaxy merger rate, a Kormendy+Ho
