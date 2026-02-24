@@ -22,7 +22,7 @@ import holodeck.sams
 import holodeck.gravwaves
 from holodeck import cosmo, utils, plot, discrete, sams, host_relations, _PATH_DATA
 from holodeck import utils, log
-from holodeck.constants import PC, MSOL, YR, MPC, GYR, SPLC
+from holodeck.constants import MSOL, PC, YR, MPC, GYR, SPLC, NWTG, SCHW
 
 from pathlib import Path
 
@@ -49,7 +49,8 @@ class Test_SAM:
                  skip_evo=False, bfrac=None, 
                  hard_t=None, hard_ai=None, hard_rc=None, 
                  hard_nin=None, hard_nout=None, gsmf_flag = None,
-                 mmbulge=None, var_value=None):
+                 mmbulge=None, var_value=None,
+                 nuin_default=None, alph_default=None,r9_default=None):
 
         if hard_type not in ('fixed2PL','fixedOuter'):
             raise ValueError(f"{hard_type=} note defined, must be 'fixed2PL' or 'fixedOuter'.")
@@ -71,7 +72,9 @@ class Test_SAM:
             self.set_sam_params_grid(tau=hard_t, ai=hard_ai, rc=hard_rc, 
                                      nin=hard_nin, nout=hard_nout, mf = gsmf_flag)
         else:
-            self.set_sam_params_manual(tau=hard_t, var_value=var_value)
+            self.set_sam_params_manual(tau=hard_t, var_value=var_value, 
+                                       nuin_default=nuin_default, alph_default=alph_default,
+                                       r9_default=r9_default)
 
         self.nfreqs = self.PARS['freqs'].size
         print(f"{self.nfreqs=}")
@@ -124,7 +127,8 @@ class Test_SAM:
 
 
             
-    def set_sam_params_manual(self, tau=None, var_value=None):
+    def set_sam_params_manual(self, tau=None, var_value=None, 
+                              nuin_default=None, alph_default=None, r9_default=None):
 
         if tau is None and 'new_hardening' not in self.model_type:
             raise ValueError("must choose a numerical value of keyword tau (in Gyr)!")
@@ -324,10 +328,12 @@ class Test_SAM:
                 hard_inner_model_type=0,
                 hard_outer_time=var_value,     # [Gyr]
                 hard_rchar=100.0,        # [pc]
-                hard_gamma_inner=-1.0,
+                #hard_gamma_inner=-1.0,
+                hard_gamma_inner=nuin_default,
                 hard_gw_crit_units='rg',
-                hard_r_gw_crit_9=1e3, 
-                hard_alpha_gw_crit=-0.25, 
+                hard_r_gw_crit_9=r9_default, 
+                #hard_alpha_gw_crit=-0.25, 
+                hard_alpha_gw_crit=alph_default, 
                 hard_dadt_rchar=None, 
                 hard_inner_time=None,
                 gsmf = holo.sams.GSMF_Double_Schechter()
@@ -341,8 +347,9 @@ class Test_SAM:
                 hard_rchar=100.0,        # [pc]
                 hard_gamma_inner=var_value,
                 hard_gw_crit_units='rg',
-                hard_r_gw_crit_9=1e3, 
-                hard_alpha_gw_crit=-0.25, 
+                hard_r_gw_crit_9=r9_default, 
+                #hard_alpha_gw_crit=-0.25, 
+                hard_alpha_gw_crit=alph_default, 
                 hard_dadt_rchar=None, 
                 hard_inner_time=None,
                 gsmf = holo.sams.GSMF_Double_Schechter()
@@ -354,10 +361,10 @@ class Test_SAM:
                 hard_inner_model_type=0,
                 hard_outer_time=1.0,     # [Gyr]
                 hard_rchar=100.0,        # [pc]
-                hard_gamma_inner=-1.0,
+                hard_gamma_inner=nuin_default,
                 hard_gw_crit_units='rg',
                 hard_r_gw_crit_9=var_value, 
-                hard_alpha_gw_crit=-0.25, 
+                hard_alpha_gw_crit=alph_default, 
                 hard_dadt_rchar=None, 
                 hard_inner_time=None,
                 gsmf = holo.sams.GSMF_Double_Schechter()
@@ -369,9 +376,9 @@ class Test_SAM:
                 hard_inner_model_type=0,
                 hard_outer_time=1.0,     # [Gyr]
                 hard_rchar=100.0,        # [pc]
-                hard_gamma_inner=-1.0,
+                hard_gamma_inner=nuin_default,
                 hard_gw_crit_units='rg',
-                hard_r_gw_crit_9=1e3, 
+                hard_r_gw_crit_9=r9_default, 
                 hard_alpha_gw_crit=var_value, 
                 hard_dadt_rchar=None, 
                 hard_inner_time=None,
@@ -452,7 +459,8 @@ class Test_SAM:
         
 def create_sams(nreals=5, nloud=5, fpath=_PATH_DATA, suite_type='grid',
                 ai=None, tau=None, gsmf=None, gpfflag=None, 
-                pickle_sams=True, pickle_name=None):
+                _nuin_default=None, _alph_default=None, _r9_default=None,
+                pickle_sams=True, pickle_name=None, pickle_name_extra=None):
 
     all_sams = []
     
@@ -520,7 +528,6 @@ def create_sams(nreals=5, nloud=5, fpath=_PATH_DATA, suite_type='grid',
             all_sams = all_sams + [s]
                 
         if pickle_sams and pickle_name is None:
-            gpf_str = ['gmr', 'gpf']
             pickle_name = f'old_new_mods_compare_tau{tau}'
 
     elif suite_type == 'model_a_varied':
@@ -618,7 +625,8 @@ def create_sams(nreals=5, nloud=5, fpath=_PATH_DATA, suite_type='grid',
         if tau is not None:
             print(f'WARNING: overriding keyword {tau=}, setting to `None` for new hardening.')
             tau = None
-            
+
+        
         varied_values = dict(
             tout=[0.1, 1.0, 10.0],
             nui=[-1.5, -1.0, -0.5, 0.0],
@@ -631,16 +639,23 @@ def create_sams(nreals=5, nloud=5, fpath=_PATH_DATA, suite_type='grid',
             varName = varName[0]
         else:
             raise ValueError(f"No unique var name match found for {suite_type=} in {varied_values.keys()=}")
-            
+
+        if varName not in ('nui', 'alph','r9') and None in (_nuin_default,_alph_default,_r9_default):
+            raise ValueError(f"Must set default value of `nui` and `alph` when these parameters are not varied.")
+        
         for i in range(len(varied_values[varName])):
             print(f'Creating test SAM for {suite_type=}, {varName=}, var_value={varied_values[varName][i]}.')
             s = Test_SAM(model_type=suite_type, nreals=nreals, nloud=nloud, gpf_flag=gpfflag, 
+                         nuin_default=_nuin_default, alph_default=_alph_default, r9_default=_r9_default,
                          var_value=varied_values[varName][i], hard_t=tau, hard_type='fixedOuter')
 
             all_sams = all_sams + [s]
     
-        if pickle_sams and pickle_name is None:
-            pickle_name = suite_type
+        if pickle_sams:
+            if pickle_name is None:
+                pickle_name = suite_type
+            if pickle_name_extra is not None:
+                pickle_name += pickle_name_extra
 
     else:
         raise ValueError(f"{suite_type=} not defined.")
@@ -704,3 +719,383 @@ if __name__ == '__main__':
 
     else:
         raise ValueError("`suite_type` must be 'grid' or 'manual'.")
+
+
+def load_sams_from_pkl(nloud=1, nreals=10, nfreqs=40, gpf_flag=False, tau=1.0,
+                  data_dir=_SIM_MERGER_PATH, fname_type='manual_moddefs'):
+
+    if fname_type=='manual_moddefs':
+        samtype = 'gpf' if gpf_flag else 'gmr'
+        sam_pkl_fname=f'test_sam_nfreqs{nfreqs}_nreals{nreals}_nloud{nloud}_manual_moddefs_{samtype}_tau{tau}.pkl'
+    elif fname_type=='old_new_mods_compare':
+        sam_pkl_fname = f'test_sam_nfreqs{nfreqs}_nreals{nreals}_nloud{nloud}_old_new_mods_compare_tau5.55.pkl'
+    elif 'new_hardening' in fname_type:
+        sam_pkl_fname = f'test_sam_nfreqs{nfreqs}_nreals{nreals}_nloud{nloud}_{fname_type}.pkl'
+    else:
+        raise ValueError(f'{fname_type=} not defined.')
+      
+    with open('/'.join((data_dir, sam_pkl_fname)), "rb") as f:
+        print(f'unpickling SAM data: {sam_pkl_fname}')
+        sams = pickle.load(f)
+        #sam, hard, gwb_new_sam, gwb_sam, freqs, freqs_edges = sam_data
+        #sam, hard, gwb_sam, MODEL_PARS = sam_data
+   
+    #return sam, hard, gwb_new_sam, gwb_sam, freqs, freqs_edges
+    #return sam, hard, gwb_sam, MODEL_PARS
+    return sams
+
+def calc_sam_dadt_from_pkl(sam, nloud=1, nreals=10, nfreqs=40, 
+                           num_steps=100, verbose=False):
+
+
+    if isinstance(sam.hard, holo.hardening.Fixed_Time_2PL_SAM):
+        print(f"before defining radii: {sam.sam.mtot.shape=} {sam.sam.mrat.shape=} {sam.sam.redz.shape=}")
+        # () start from the hardening model's initial separation
+        rmax = sam.hard._sepa_init
+        # (M,) end at the ISCO
+        rmin = utils.rad_isco(sam.sam.mtot)
+        # rmin = hard._TIME_TOTAL_RMIN * np.ones_like(sam.mtot)
+        # Choose steps for each binary, log-spaced between rmin and rmax
+        extr = np.log10([rmax * np.ones_like(rmin), rmin])
+        radii = np.linspace(0.0, 1.0, num_steps)[np.newaxis, :]
+        # (M, X)
+        radii = extr[0][:, np.newaxis] + (extr[1] - extr[0])[:, np.newaxis] * radii
+        radii = 10.0 ** radii
+        # (M, Q, Z, X)
+        mt, mr, rz, rads = np.broadcast_arrays(
+            sam.sam.mtot[:, np.newaxis, np.newaxis, np.newaxis],
+            sam.sam.mrat[np.newaxis, :, np.newaxis, np.newaxis],
+            sam.sam.redz[np.newaxis, np.newaxis, :, np.newaxis],
+            radii[:, np.newaxis, np.newaxis, :]
+        )
+
+        # old: (X, M*Q*Z) --- `Fixed_Time.dadt` will only accept this shape
+        # new: (M, Q, Z, X) is shape of input and output arrays
+        dadt = sam.hard.dadt(mt, mr, rads)
+
+        return sam.sam, sam.hard, rads, dadt, sam.gwb_sam
+        
+    elif isinstance(sam.hard, holo.hardening.FixedOuterTime_InnerPL_SAM):
+        
+        # () start from the hardening model's initial separation
+        rmax = sam.hard._rchar
+        # (M,) end at the ISCO
+        rmin = utils.rad_isco(sam.sam.mtot)
+        # Choose steps for each binary, log-spaced between rmin and rmax
+        extr = np.log10([rmax * np.ones_like(rmin), rmin])
+        radii = np.linspace(0.0, 1.0, num_steps)[np.newaxis, :]
+        # (M, X)
+        radii = extr[0][:, np.newaxis] + (extr[1] - extr[0])[:, np.newaxis] * radii
+        radii = 10.0 ** radii
+        # (M, Q, Z, X)
+        mt, mr, rz, rads = np.broadcast_arrays(
+            sam.sam.mtot[:, np.newaxis, np.newaxis, np.newaxis],
+            sam.sam.mrat[np.newaxis, :, np.newaxis, np.newaxis],
+            sam.sam.redz[np.newaxis, np.newaxis, :, np.newaxis],
+            radii[:, np.newaxis, np.newaxis, :]
+        )
+
+        if verbose:
+            print(sam.model_type)
+            print(f"{sam.PARS['hard_outer_time']=}")
+            print(sam.sam.mtot.shape, sam.sam.mrat.shape, sam.sam.redz.shape)
+            print(sam.gwb_sam[0].shape,sam.gwb_sam[1].shape,sam.gwb_sam[2].shape,sam.gwb_sam[3].shape)
+            print(f"{s.hard._rchar=} {sam.hard._rchar/PC=}")
+            print(rmin.shape, rmin.min(), rmin.max())
+            print(np.log10(sam.hard._rchar), np.log10(rmin), num_steps)
+
+        dadt, agw_crit, rz_char, rz_final = sam.hard.dadt(mt, mr, rz, rads)
+
+        return sam.sam, sam.hard, rads, dadt, agw_crit, rz_char, rz_final, sam.gwb_sam
+
+    else:
+        raise ValueError("`calc_sam_dadt_from_pkl` requires hard_type='2PL' or 'InnerPL'")
+        return np.nan
+
+
+def calc_cumulative_thard(_sam_data, astart, astop, fixedTime='total'):
+
+    if fixedTime not in ['total','outer']:
+        raise ValueError(f"keyword `fixedTime` must be 'total' or 'outer'.")
+
+    if fixedTime=='total':
+            if len(_sam_data) == 4:
+                _sam, _hard, _rads, _dadt = _sam_data
+            elif len(_sam_data) == 5:
+                _sam, _hard, _rads, _dadt, _gwb = _sam_data
+            else:
+                raise ValueError(f"sam_data has unexpected length {len(_sam_data)}. must be 4 or 5 for `fixedTime`='total'.")
+    else:
+        if len(_sam_data) == 7:
+            _sam, _hard, _rads, _dadt, _agw_crit, _rz_char, _rz_final = _sam_data
+        elif len(_sam_data) == 8:
+            _sam, _hard, _rads, _dadt, _agw_crit, _rz_char, _rz_final, _gwb = _sam_data
+        else:
+            raise ValueError(f"sam_data has unexpected length {len(_sam_data)}. must be 7 or 8 for `fixedTime`='outer'")
+
+
+    idx_avals = np.where((_rads[0,0,0,:]<=astart)&(_rads[0,0,0,:]>=astop))[0]
+    
+    _tevo = -utils.trapz_loglog(-1.0 / _dadt[:,:,0,idx_avals], _rads[:,:,0,idx_avals], 
+                                axis=2, cumsum=True)
+    return _tevo
+
+
+def calc_aGW_for_Fixed_Time_2PL(_hard, _sam):
+    """Calculate (circular) binary separation of transition from 'inner' power-law hardening to GW regime"""
+
+    
+    _mt, _mr = np.broadcast_arrays(
+        _sam.mtot[:, np.newaxis],
+        _sam.mrat[np.newaxis, :]
+    )
+    
+    _m1, _m2 = utils.m1m2_from_mtmr(_mt, _mr)
+    #print(f"{mt/MSOL=},{mr=}")
+    #print(f"{m1/MSOL=},{m2/MSOL=}")
+    dadt_gw_const = - (64/5.0) * NWTG**3 / SPLC**5 * _m1 * _m2 * _mt
+    #print(f"{dadt_gw_const.shape=} {dadt_gw_const=}")
+    dadt_innerPL_const = - _hard._norm * _hard._rchar**(_hard._gamma_inner-1)
+    #print(f"{dadt_innerPL_const.shape=} {dadt_innerPL_const=}")
+    
+    aGW = ( dadt_gw_const / dadt_innerPL_const ) ** (1.0/(4.0-_hard._gamma_inner))
+    #print(f"{aGW=}")
+    
+    return aGW
+
+def sepa_emit(mtot, fgw):
+    """
+    separation of an equal-mass circular binary with total mass mtot emitting GWs at frequency fgw
+    
+    assumes mtot in cgs and fgw in Hz, returns separation in cm
+    """
+    #print(f'{MSOL=}, {mtot=}, {fgw=}, {NWTG=}')
+    return ( NWTG * mtot / (fgw * np.pi) **2 )**(1.0/3)
+
+def plot_dadt(sam_data, distance_units='pc', fixedTime='total', 
+              max_to_plot=4, extra_panels=False, verbose=False):
+    
+    if distance_units == 'pc':
+        xlim=[1e-8,1e5]
+    elif distance_units == 'rg':
+        xlim=[1,1e13]
+    else:
+        raise ValueError(f"invalid keyword {distance_units=}. must be 'pc' or 'rg'.")
+    
+    if fixedTime not in ['total','outer']:
+        raise ValueError(f"keyword `fixedTime` must be 'total' or 'outer'.")
+    
+    # Make the plot
+    if extra_panels:
+        fig = plt.figure(figsize=(12,9))
+        first_plot_index = 231
+    else:
+        fig = plt.figure(figsize=(12,4))
+        first_plot_index = 131
+        
+    
+    ax1 = fig.add_subplot(first_plot_index)
+    plt.xscale('log')
+    plt.xlim(xlim[0],xlim[1])
+    plt.yscale('log')
+    ax1.xaxis.set_inverted(True)
+    plt.xlabel(f'binary separation [{distance_units}]')
+    plt.ylabel('hardening tscale [yr]')
+    #plt.ylim(1e4,1e10)
+
+    ax2 = fig.add_subplot(first_plot_index+1)
+    plt.xscale('log')
+    plt.xlim(xlim[0],xlim[1])
+    plt.yscale('log')
+    ax2.xaxis.set_inverted(True)
+    plt.xlabel(f'binary separation [{distance_units}]')
+    plt.ylabel('hardening rate [cm/s]')
+    #plt.ylim(1e4,1e10)
+
+    ax3 = fig.add_subplot(first_plot_index+2)
+    plt.xscale('log')
+    plt.xlim(xlim[0],xlim[1])
+    plt.yscale('log')
+    ax3.xaxis.set_inverted(True)
+    plt.xlabel(f'binary separation [{distance_units}]')
+    plt.ylabel('cumulative time [yr]')
+
+    if extra_panels:
+        ax4 = fig.add_subplot(first_plot_index+3)
+        plt.xscale('log')
+        plt.xlim(xlim[0],xlim[1])
+        plt.yscale('log')
+        ax4.xaxis.set_inverted(True)
+        plt.xlabel(f'binary separation [{distance_units}]')
+        plt.ylabel(r's (hardening parameter) ')
+
+        ax5 = fig.add_subplot(first_plot_index+4)
+        plt.xscale('log')
+        #plt.xlim(xlim[0],xlim[1])
+        plt.yscale('log')
+        #ax5.xaxis.set_inverted(True)
+        plt.xlabel(r'<s_inner> [pc Myr]$^{-1}$')
+        plt.ylabel('cumulative time [yr]')
+
+        #ax4 = fig.add_subplot(first_plot_index+3)
+        #plt.xscale('log')
+        #plt.xlim(xlim[0],xlim[1])
+        #plt.yscale('log')
+        #ax4.xaxis.set_inverted(True)
+        #plt.xlabel(f'a_GW,crit [{distance_units}]')
+        #plt.ylabel('time from fobs=1/30yr to ISCO [yr]')
+
+        #ax5 = fig.add_subplot(first_plot_index+4)
+        #plt.xscale('log')
+        #plt.xlim(xlim[0],xlim[1])
+        #plt.yscale('log')
+        #ax5.xaxis.set_inverted(True)
+        #plt.xlabel(f'a_GW,crit [{distance_units}]')
+        #plt.ylabel('a(fobs=1/30yr) / a_GW,crit')
+
+    
+    cmap_arr = ['Blues', 'Oranges',  'Greens', 'Reds', 'Purples',
+                'Greys', 'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu',
+                'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn']*2
+    fgw_ls = ['-','-.',':']
+    lhandles = []
+    flhandles = []
+    
+    nu_mrk = ['s','^','o','*']
+    
+    for n,sd in enumerate(sam_data):
+        
+        if fixedTime=='total':
+            if len(sd) == 4:
+                sam, hard, rads, dadt = sd
+            elif len(sd) == 5:
+                sam, hard, rads, dadt, gwb = sd
+            else:
+                raise ValueError(f"sam_data has unexpected length {len(sd)}. must be 4 or 5 for `fixedTime`='total'.")
+                
+            agw = calc_aGW_for_Fixed_Time_2PL(hard, sam)
+            #print(f"{hard._norm.shape=} {agw.shape=}")
+            
+        else: 
+            # fixedTime == 'outer'
+            if len(sd) == 7:
+                sam, hard, rads, dadt, agw, rzch, rzf = sd
+            elif len(sd) == 8:
+                sam, hard, rads, dadt, agw, rzch, rzf, gwb = sd
+            else:
+                raise ValueError(f"sam_data has unexpected length {len(sd)}. must be 7 or 8 for `fixedTime`='outer'")
+
+
+        #print(f"{sam.mtot.shape=}, {sam.mrat.shape=}")
+        mt_nskip = int((sam.mtot.size-1)/(max_to_plot-1)) if sam.mtot.size>max_to_plot else 1
+        mr_nskip = int((sam.mrat.size-1)/(max_to_plot-1)) if sam.mrat.size>max_to_plot else 1
+
+        
+        times_evo = calc_cumulative_thard(sd, rads[0,0,0,0], rads[0,0,0,-1],fixedTime=fixedTime)
+        #times_evo = -utils.trapz_loglog(-1.0 / dadt[:,:,0,:], rads[:,:,0,:], axis=2, cumsum=True)
+         
+        cmap = plot._get_cmap(cmap_arr[n])
+        colors = cmap(np.linspace(0.3, 1, max_to_plot+1))
+        lw = np.arange(0.5,max_to_plot+1, 0.5)
+
+        freqs, freqs_edges = utils.pta_freqs()
+
+        if verbose:
+            print(f"*** in plotting function: {rads.min()=} {rads.max()=}")
+            print(f"{mt_nskip=}, {mr_nskip=}")
+            print(f"{rads[0,0,0,0]=}, {rads[0,0,0,-1]=}")
+            print(freqs_edges.min(),freqs_edges.max())
+            if n==0:
+                print('Mtot=', sam.mtot/MSOL)
+                print('q=', sam.mrat)
+                print('redz=', sam.redz)
+
+        
+        i_plot = 0
+        for i in np.arange(0,sam.mtot.size,mt_nskip):
+            
+            if distance_units == 'pc':
+                dunits = PC
+            elif distance_units == 'rg':
+                dunits = NWTG * sam.mtot[i] / SPLC**2
+            
+            #print(f'Mtot = {sam.mtot[i]/MSOL:.2g}')
+            #for fi,frst in enumerate([freqs_edges.min(),freqs_edges.max()]):
+            frst_min = utils.frst_from_fobs(freqs_edges.min(), sam.redz.min())
+            sepa_obs_max = sepa_emit(sam.mtot[i],frst_min) / dunits
+            flmi,= ax1.plot([sepa_obs_max,sepa_obs_max],[1e-4,1e10],ls='-',
+                            alpha=0.7,color=colors[i_plot],label=f'frst={frst_min:.2g}Hz')
+            #ax2.plot([sepa_em,sepa_em],[1e-3,1e11],ls=fgw_ls[fi],color=colors[i])
+            #print(f'{fi=},{fgw_ls[fi]}, {fem}')
+            if i_plot==max_to_plot and n==len(sam_data)-1:
+                flhandles += [flmi]
+                    
+            a_late = sepa_emit(sam.mtot[i], 1.0/(30*YR)) 
+            #print(f"mtot={sam.mtot[i]/MSOL:.3g}: in {distance_units}: {a_late/dunits=:.3g} "
+            #      f"{agw[i,0]/dunits=:.3g} {agw[i,-1]/dunits=:.3g} {a_late/agw[i,0]=:.3g} {a_late/agw[i,-1]=:.3g}")
+            #print(f"{sam.mtot[i]=}: {a_late/dunits=} [{distance_units}]")
+            times_early = calc_cumulative_thard(sd, rads[0,0,0,0], a_late,fixedTime=fixedTime)
+            times_late = calc_cumulative_thard(sd, a_late, rads[0,0,0,-1],fixedTime=fixedTime)
+            #print(f"{times_evo.shape=},{times_early.shape=},{times_late.shape=}")
+            ax2.plot([a_late/dunits, a_late/dunits], [1e-3,1e11], color=colors[i_plot], alpha=0.1)
+
+            j_plot=0
+            for j in np.arange(0,sam.mrat.size,mr_nskip):
+                
+                if fixedTime=='total':
+                    l,= ax1.plot(rads[i,j,0,:]/dunits, -rads[i,j,0,:]/dadt[i,j,0,:]/YR, 
+                                 alpha=0.5, color=colors[i_plot], lw=lw[j_plot], 
+                                 label=f'tau={hard._target_time/GYR}')
+                    if i_plot==max_to_plot and j_plot==max_to_plot:
+                        lhandles += [l]
+                else: 
+                    ax1.plot(rads[i,j,0,:]/dunits, -rads[i,j,0,:]/dadt[i,j,0,:]/YR, 
+                             alpha=0.5, color=colors[i_plot], lw=lw[j_plot])
+
+                if j_plot==max_to_plot and n==len(sam_data)-1:
+                    ax2.plot(rads[i,j,0,:]/dunits, -dadt[i,j,0,:], 
+                             alpha=0.5, color=colors[i_plot], lw=lw[j_plot], 
+                             label=f'mtot={sam.mtot[i]/MSOL:.2g}')
+                else:
+                    ax2.plot(rads[i,j,0,:]/dunits, -dadt[i,j,0,:], 
+                             alpha=0.5, color=colors[i_plot], lw=lw[j_plot],label=None)                
+                
+                ax3.plot(rads[i,j,0,:-1]/dunits, times_evo[i,j,:]/YR, 
+                         alpha=0.5, color=colors[i_plot], lw=lw[j_plot])
+                
+                j_plot += 1
+
+
+                if extra_panels:
+                    hard_param_s = -dadt[i,j,0,:]/rads[i,j,0,:]**2*PC*YR*1.0e6 # 1/(pc*Myr)
+                    avg_hard_param_s = hard_param_s.mean()
+                
+                    if j_plot==max_to_plot and n==len(sam_data)-1:
+                        ax4.plot(rads[i,j,0,:]/dunits, hard_param_s, 
+                                 alpha=0.5, color=colors[i_plot], lw=lw[j_plot],
+                                 label=f'mtot={sam.mtot[i]/MSOL:.2g}')
+                    else:
+                        ax4.plot(rads[i,j,0,:]/dunits, hard_param_s, 
+                                 alpha=0.5, color=colors[i_plot], lw=lw[j_plot],label=None)
+                    ax5.scatter(avg_hard_param_s, times_evo[i,j,-1]/YR)
+
+            i_plot += 1
+        
+        if fixedTime=='total':
+            ax1.plot(xlim, [hard._target_time/YR, hard._target_time/YR], '--', color='darkgray')
+            if distance_units=='pc': ax1.plot([hard._rchar/dunits, hard._rchar/dunits], [1e-2,1e10],'k--')
+            if distance_units=='pc': ax2.plot([hard._rchar/dunits, hard._rchar/dunits], [10,1e11],'k--')
+    ax2.plot(xlim, [3.0e10,3.0e10], color='magenta')
+    ax3.plot(xlim, [13.7e9,13.7e9], 'k:')
+    leg2 = ax1.legend(handles=flhandles, loc='lower right')
+    #ax1.legend(handles=lhandles, loc='lower left')
+    ax1.add_artist(leg2)
+    ax2.legend(loc='lower left')
+        
+    if fixedTime=='total':
+        plt.suptitle(f'ai={hard._sepa_init/PC:.2g}pc, '
+                     f'rc={hard._rchar/PC:.2g}pc,'
+                     f' nu_in={hard._gamma_inner}, nu_out={hard._gamma_outer}\n'
+                     f'Mtot=({sam.mtot.min()/MSOL:.2g},{sam.mtot.max()/MSOL:.2g})Msun, '
+                     f'q=({sam.mrat.min():.2g},{sam.mrat.max():.2g})')
+    fig.subplots_adjust(wspace=0.3,top=0.85, right=0.95)
