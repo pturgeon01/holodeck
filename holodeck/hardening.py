@@ -53,18 +53,21 @@ from holodeck import utils, cosmo, log, _PATH_DATA, galaxy_profiles
 from holodeck.host_relations import (
     get_stellar_mass_halo_mass_relation, get_mmbulge_relation, get_msigma_relation
 )
-from holodeck.constants import GYR, NWTG, PC, MSOL
+from holodeck.constants import GYR, NWTG, PC, MSOL, SPLC
 
 #: number of influence radii to set minimum radius for dens calculation
 _MIN_DENS_RAD__INFL_RAD_MULT = 10.0
 _SCATTERING_DATA_FILENAME = "SHM06_scattering_experiments.json"
 
+# Absolute upper limit on dadt for any hardening method. Invoked only when ENFORCE_SPEED_LIMIT=True
+_DADT_SPEED_LIMIT = 1.0 * SPLC
 
 class _Hardening(abc.ABC):
     """Base class for binary-hardening models, providing the `dadt_dedt(evo, step, ...)` method.
     """
 
     CONSISTENT = None
+    ENFORCE_SPEED_LIMIT = None
 
     @abc.abstractmethod
     def dadt_dedt(self, evo, step, *args, **kwargs):
@@ -89,6 +92,7 @@ class Hard_GW(_Hardening):
     """
 
     CONSISTENT = False
+    ENFORCE_SPEED_LIMIT = False
 
     @staticmethod
     def dadt_dedt(evo, step):
@@ -223,6 +227,7 @@ class CBD_Torques(_Hardening):
     """
 
     CONSISTENT = None
+    ENFORCE_SPEED_LIMIT = False
 
     def __init__(self, f_edd = 0.10, subpc = True):
         """Construct a CBD-Torque instance.
@@ -758,7 +763,8 @@ class Fixed_Time_2PL(_Hardening):
     _INTERP_THRESH_PAD_FACTOR = 5.0      #: allowance for when to use chunking and when to process full array
     _NORM_CHUNK_SIZE = 1e3
     CONSISTENT = True
-
+    ENFORCE_SPEED_LIMIT = False
+    
     def __init__(self, time, mtot, mrat, redz, sepa_init,
                  rchar=100.0*PC, gamma_inner=-1.0, gamma_outer=+1.5,
                  progress=False, interpolate_norm=False):
@@ -1371,6 +1377,7 @@ class Fixed_Time_2PL_SAM(_Hardening):
     """
 
     CONSISTENT = True
+    ENFORCE_SPEED_LIMIT = False
 
     def __init__(self, sam, time, sepa_init=1.0e3*PC, rchar=10.0*PC, gamma_inner=-1.0, gamma_outer=+1.5, num_steps=300):
         """Initialize a `Fixed_Time_2PL_SAM` instance using a provided `Semi_Analytic_Model` instance.
@@ -1472,9 +1479,7 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
     """
 
     CONSISTENT = True
-    
-    #### TO DO: Add criterion to prevent superluminal hardening(!!) -- should also add to other models
-    ENFORCE_SPEED_LIMIT = False
+    ENFORCE_SPEED_LIMIT = True
 
     def __init__(self, sam, num_steps=300, outer_time=1.0*GYR, rchar=100.0*PC, 
                  gamma_inner=-1.0, gw_crit_units='rg', r_gw_crit_9=1e3, 
@@ -1580,6 +1585,29 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
         #if np.any((self._rgw_crit>self._rchar)):
         #    raise ValueError("all elements of rmax must be > rgw_crit.")     
 
+        if self.ENFORCE_SPEED_LIMIT:
+            # (M,) start at rchar, end at the ISCO
+            rmin = utils.rad_isco(sam.mtot)
+            # Choose steps for each binary, log-spaced between rmin and rmax
+            extr = np.log10([self._rchar * np.ones_like(rmin), rmin])
+            radii = np.linspace(0.0, 1.0, num_steps)[np.newaxis, :]
+            # (M, X)
+            radii = extr[0][:, np.newaxis] + (extr[1] - extr[0])[:, np.newaxis] * radii
+            radii = 10.0 ** radii
+            # (M, Q, Z, X)
+            mt, mr, rz, rads = np.broadcast_arrays(
+                sam.mtot[:, np.newaxis, np.newaxis, np.newaxis],
+                sam.mrat[np.newaxis, :, np.newaxis, np.newaxis],
+                sam.redz[np.newaxis, np.newaxis, :, np.newaxis],
+                radii[:, np.newaxis, np.newaxis, :]
+            )
+            dadt_vals,rgwc,rzc,rzf = self.dadt(mt, mr, rz, rads)
+            dadt_max = np.abs(dadt_vals).max()
+            if dadt_max > _DADT_SPEED_LIMIT:
+                err = f"Invalid hardening model! {dadt_max=:.6g} (>{_DADT_SPEED_LIMIT/SPLC}c)."
+                log.error(err)
+                raise ValueError(err)
+        
         return
 
     def __str__(self):
@@ -1697,23 +1725,20 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
             rgw_crit = r9 * m9**(self._alpha_gw_crit+1)
             print(f"{rgw_crit.shape=} {rgw_crit.min()=} {rgw_crit.max()=} pc")
 
-            if np.any((rgw_crit>self._rchar)):
-                log.warning(f"found rchar < rgw_crit! ({rgw_crit.max()=}, {self._rchar=}")
-                #raise ValueError(f"all elements of rchar must be > rgw_crit. ({rgw_crit.max()=}, {self._rchar=}")
-
             dadt_gw_crit = utils.gw_hardening_rate_dadt(m1, m2, rgw_crit)
             #print(f"{dadt_gw_crit.shape=}")
 
-            nu_inner = 1 - ( np.log(-dadt_gw_crit) - np.log(-self._dadt_rchar) ) / ( np.log(rgw_crit) - np.log(self._rchar) )
-            #print(f"{self._dadt_rchar=} {self._rchar=}")
-            #nu_inner = 1 - ( np.log(-dadt_gw_crit) - np.log(-dadt_rchar_scaled) ) / ( np.log(rgw_crit) - np.log(self._rchar) )
-            #print(f"{dadt_rchar_scaled.min()=} {dadt_rchar_scaled.max()=} {self._dadt_rchar=} {self._rchar=}")
-            #print(f"{dadt_gw_crit.min()=} {dadt_gw_crit.max()=}") 
-            #print(f"{rgw_crit.min()=} {rgw_crit.max()=}")
-            #print(f"{nu_inner.min()=} {nu_inner.max()=}")
-
-            # "inner" PL hardening rate
+            # "inner" PL and hardening rate
+            eta_norm = _mrat / np.square(1 + _mrat) * 4
+            print(f"{eta_norm.min()=}, {eta_norm.max()=}")
+            nu_inner = 1 - ( np.log(-dadt_gw_crit) - np.log(-self._dadt_rchar*eta_norm) ) / ( np.log(rgw_crit) - np.log(self._rchar) )
             dadt_vals = dadt_gw_crit * ( _sepa / rgw_crit ) ** (1.0-nu_inner)
+
+            if np.any((rgw_crit>self._rchar)):
+                log.warning(f"found rchar < rgw_crit! ({rgw_crit.max()=:.6g}, {self._rchar=:.6g}."
+                            f" setting PL dadt=0 for these instances.")
+                #raise ValueError(f"all elements of rchar must be > rgw_crit. ({rgw_crit.max()=}, {self._rchar=}")
+                dadt_vals[rgw_crit>self._rchar] = 0.0                
         
         elif self._inner_model_type == 2:
             # set inner hardening using dadt_rchar and gamma_inner (lowest priority for testing)
