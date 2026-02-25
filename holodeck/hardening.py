@@ -1647,7 +1647,8 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
 
         print(f"*** {_sepa.max()=}  {_sepa.min()=} ***")
         m1, m2 = utils.m1m2_from_mtmr(_mtot, _mrat)
-        print(f"{m1.shape=} {m2.shape=} {_mtot.shape=} {_mrat.shape=} {_mtot.shape=}")
+        #print(f"{m1.shape=} {m2.shape=} {_mtot.shape=} {_mrat.shape=} {_mtot.shape=}")
+        print(f"{_mtot.shape=}")
 
         redz_char = utils.redz_after(self._outer_time, redz=_redz, age=None)   # redshift at end of 'outer' phase 
 
@@ -1665,10 +1666,11 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
                 r9 = self._r_gw_crit_9 * PC # convert to pc
                 
             rgw_crit = r9 * m9**(self._alpha_gw_crit+1)
-            print(f"{rgw_crit.shape=} {rgw_crit.min()=} {rgw_crit.max()=} pc")
+            #print(f"{rgw_crit.shape=} {rgw_crit.min()=} {rgw_crit.max()=} pc")
 
             if np.any((rgw_crit>self._rchar)):
-                raise ValueError(f"all elements of rchar must be > rgw_crit. ({rgw_crit.max()=}, {self._rchar=}")
+                log.warning(f"found rchar < rgw_crit! ({rgw_crit.max()=}, {self._rchar=}")
+                #raise ValueError(f"all elements of rchar must be > rgw_crit. ({rgw_crit.max()=}, {self._rchar=}")
 
             #r9 = self._r_gw_crit_9 * utils.gravitational_radius(_mtot) 
             #rgw_crit = r9 * (_mtot / (1.0e9*MSOL))**(self._alpha_gw_crit-1)
@@ -1677,7 +1679,7 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
             #print(f"{rgw_crit.shape=} {rgw_crit.min()=} {rgw_crit.max()=} pc")
 
             dadt_gw_crit = utils.gw_hardening_rate_dadt(m1, m2, rgw_crit)
-            print(f"{dadt_gw_crit.shape=}")
+            #print(f"{dadt_gw_crit.shape=}")
 
             # "inner" PL hardening rate
             dadt_vals = dadt_gw_crit * ( _sepa / rgw_crit ) ** (1.0-self._gamma_inner)
@@ -1696,18 +1698,19 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
             print(f"{rgw_crit.shape=} {rgw_crit.min()=} {rgw_crit.max()=} pc")
 
             if np.any((rgw_crit>self._rchar)):
-                raise ValueError(f"all elements of rchar must be > rgw_crit. ({rgw_crit.max()=}, {self._rchar=}")
+                log.warning(f"found rchar < rgw_crit! ({rgw_crit.max()=}, {self._rchar=}")
+                #raise ValueError(f"all elements of rchar must be > rgw_crit. ({rgw_crit.max()=}, {self._rchar=}")
 
             dadt_gw_crit = utils.gw_hardening_rate_dadt(m1, m2, rgw_crit)
-            print(f"{dadt_gw_crit.shape=}")
+            #print(f"{dadt_gw_crit.shape=}")
 
             nu_inner = 1 - ( np.log(-dadt_gw_crit) - np.log(-self._dadt_rchar) ) / ( np.log(rgw_crit) - np.log(self._rchar) )
-            print(f"{self._dadt_rchar=} {self._rchar=}")
+            #print(f"{self._dadt_rchar=} {self._rchar=}")
             #nu_inner = 1 - ( np.log(-dadt_gw_crit) - np.log(-dadt_rchar_scaled) ) / ( np.log(rgw_crit) - np.log(self._rchar) )
             #print(f"{dadt_rchar_scaled.min()=} {dadt_rchar_scaled.max()=} {self._dadt_rchar=} {self._rchar=}")
-            print(f"{dadt_gw_crit.min()=} {dadt_gw_crit.max()=}") 
-            print(f"{rgw_crit.min()=} {rgw_crit.max()=}")
-            print(f"{nu_inner.min()=} {nu_inner.max()=}")
+            #print(f"{dadt_gw_crit.min()=} {dadt_gw_crit.max()=}") 
+            #print(f"{rgw_crit.min()=} {rgw_crit.max()=}")
+            #print(f"{nu_inner.min()=} {nu_inner.max()=}")
 
             # "inner" PL hardening rate
             dadt_vals = dadt_gw_crit * ( _sepa / rgw_crit ) ** (1.0-nu_inner)
@@ -1726,16 +1729,16 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
         
         dadt_vals += dadt_gw
         
-        print(f"{dadt_vals.shape=} {_sepa.shape=}")
+        #print(f"{dadt_vals.shape=} {_sepa.shape=}")
         inner_time = -utils.trapz_loglog(-1.0 / dadt_vals, _sepa, axis=-1, cumsum=True)
-        print(f"{inner_time.shape=}")
+        #print(f"{inner_time.shape=}")
         inner_time = inner_time[:,:,:,-1]
-        print(f"{inner_time.shape=}")
+        #print(f"{inner_time.shape=}")
         redz_final = utils.redz_after(inner_time, redz=redz_char[:,:,:,-1], age=None) # merger redshift 
-        print(f"{inner_time.shape=} {redz_final.shape=}  {redz_char.shape=}")
+        #print(f"{inner_time.shape=} {redz_final.shape=}  {redz_char.shape=}")
 
         ####    prob need to add some reshaping stuff like in Fixed_Time_2PL_SAM()
-        print(f"before return: {dadt_vals.shape=}")
+        #print(f"before return: {dadt_vals.shape=}")
         
         return dadt_vals, rgw_crit, redz_char, redz_final
 
