@@ -49,8 +49,9 @@ class Test_SAM:
                  skip_evo=False, bfrac=None, 
                  hard_t=None, hard_ai=None, hard_rc=None, 
                  hard_nin=None, hard_nout=None, gsmf_flag = None,
-                 mmbulge=None, var_value=None,
-                 nuin_default=None, alph_default=None,r9_default=None):
+                 mmbulge=None, var_value=None, tout_default=None,
+                 nuin_default=None, dadt_default=None, 
+                 alph_default=None,r9_default=None):
 
         if hard_type not in ('fixed2PL','fixedOuter'):
             raise ValueError(f"{hard_type=} note defined, must be 'fixed2PL' or 'fixedOuter'.")
@@ -72,9 +73,9 @@ class Test_SAM:
             self.set_sam_params_grid(tau=hard_t, ai=hard_ai, rc=hard_rc, 
                                      nin=hard_nin, nout=hard_nout, mf = gsmf_flag)
         else:
-            self.set_sam_params_manual(tau=hard_t, var_value=var_value, 
-                                       nuin_default=nuin_default, alph_default=alph_default,
-                                       r9_default=r9_default)
+            self.set_sam_params_manual(tau=hard_t, var_value=var_value, tout_default=tout_default,
+                                       nuin_default=nuin_default, dadt_default=dadt_default,
+                                       alph_default=alph_default, r9_default=r9_default)
 
         self.nfreqs = self.PARS['freqs'].size
         print(f"{self.nfreqs=}")
@@ -107,6 +108,8 @@ class Test_SAM:
                                                           gamma_outer = self.PARS['hard_gamma_outer'],
                                                          )
         else:
+            print(f"{self.PARS['hard_dadt_rchar']=}, {self.PARS['hard_r_gw_crit_9']=}, "
+                  f"{self.PARS['hard_alpha_gw_crit']=}, {self.PARS['hard_gamma_inner']=}, {self.PARS['hard_inner_time']=}") 
             self.hard = holo.hardening.FixedOuterTime_InnerPL_SAM(self.sam, 
                                                                   inner_model_type = self.PARS['hard_inner_model_type'],
                                                                   outer_time = self.PARS['hard_outer_time']*GYR, 
@@ -127,8 +130,9 @@ class Test_SAM:
 
 
             
-    def set_sam_params_manual(self, tau=None, var_value=None, 
-                              nuin_default=None, alph_default=None, r9_default=None):
+    def set_sam_params_manual(self, tau=None, var_value=None, tout_default=None,
+                              dadt_default=None, nuin_default=None, 
+                              alph_default=None, r9_default=None):
 
         if tau is None and 'new_hardening' not in self.model_type:
             raise ValueError("must choose a numerical value of keyword tau (in Gyr)!")
@@ -343,7 +347,7 @@ class Test_SAM:
             self.PARS = dict(
                 desc='set inner hardening using gamma_inner, r_gw_crit_9, and alpha_gw_crit',
                 hard_inner_model_type=0,
-                hard_outer_time=1.0,     # [Gyr]
+                hard_outer_time=tout_default,     # [Gyr]
                 hard_rchar=100.0,        # [pc]
                 hard_gamma_inner=var_value,
                 hard_gw_crit_units='rg',
@@ -359,7 +363,7 @@ class Test_SAM:
             self.PARS = dict(
                 desc='set inner hardening using gamma_inner, r_gw_crit_9, and alpha_gw_crit',
                 hard_inner_model_type=0,
-                hard_outer_time=1.0,     # [Gyr]
+                hard_outer_time=tout_default,     # [Gyr]
                 hard_rchar=100.0,        # [pc]
                 hard_gamma_inner=nuin_default,
                 hard_gw_crit_units='rg',
@@ -374,7 +378,7 @@ class Test_SAM:
             self.PARS = dict(
                 desc='set inner hardening using gamma_inner, r_gw_crit_9, and alpha_gw_crit',
                 hard_inner_model_type=0,
-                hard_outer_time=1.0,     # [Gyr]
+                hard_outer_time=tout_default,     # [Gyr]
                 hard_rchar=100.0,        # [pc]
                 hard_gamma_inner=nuin_default,
                 hard_gw_crit_units='rg',
@@ -384,17 +388,62 @@ class Test_SAM:
                 hard_inner_time=None,
                 gsmf = holo.sams.GSMF_Double_Schechter()
             )
-        elif self.model_type == 'new_hardening_type1':
+        elif self.model_type == 'new_hardening_type1_toutvar':
             # set inner hardening using dadt_rchar, r_gw_crit_9, and alpha_gw_crit
             self.PARS = dict(
                 desc='set inner hardening using dadt_rchar, r_gw_crit_9, and alpha_gw_crit',
                 hard_inner_model_type=1,
-                hard_outer_time=1.0,     # [Gyr]
-                hard_rchar=100.0,        # [pc]
-                hard_dadt_rchar=-1.0e7,  # [cm/s]
+                hard_outer_time=var_value,     # [Gyr]
+                hard_rchar=1.0,        # [pc]
+                hard_dadt_rchar=dadt_default,  # [cm/s]
                 hard_gw_crit_units='rg',
-                hard_r_gw_crit_9=1e3, 
-                hard_alpha_gw_crit=-0.25, 
+                hard_r_gw_crit_9=r9_default, 
+                hard_alpha_gw_crit=alph_default, 
+                hard_gamma_inner=None,
+                hard_inner_time=None,
+                gsmf = holo.sams.GSMF_Double_Schechter()                
+            )
+        elif self.model_type == 'new_hardening_type1_dadtvar':
+            # set inner hardening using dadt_rchar, r_gw_crit_9, and alpha_gw_crit
+            self.PARS = dict(
+                desc='set inner hardening using dadt_rchar, r_gw_crit_9, and alpha_gw_crit',
+                hard_inner_model_type=1,
+                hard_outer_time=tout_default,     # [Gyr]
+                hard_rchar=1.0,        # [pc]
+                hard_dadt_rchar=var_value,  # [cm/s]
+                hard_gw_crit_units='rg',
+                hard_r_gw_crit_9=r9_default, 
+                hard_alpha_gw_crit=alph_default, 
+                hard_gamma_inner=None,
+                hard_inner_time=None,
+                gsmf = holo.sams.GSMF_Double_Schechter()                
+            )
+        elif self.model_type == 'new_hardening_type1_r9var':
+            # set inner hardening using dadt_rchar, r_gw_crit_9, and alpha_gw_crit
+            self.PARS = dict(
+                desc='set inner hardening using dadt_rchar, r_gw_crit_9, and alpha_gw_crit',
+                hard_inner_model_type=1,
+                hard_outer_time=tout_default,     # [Gyr]
+                hard_rchar=1.0,        # [pc]
+                hard_dadt_rchar=dadt_default,  # [cm/s]
+                hard_gw_crit_units='rg',
+                hard_r_gw_crit_9=var_value, 
+                hard_alpha_gw_crit=alph_default, 
+                hard_gamma_inner=None,
+                hard_inner_time=None,
+                gsmf = holo.sams.GSMF_Double_Schechter()                
+            )
+        elif self.model_type == 'new_hardening_type1_alphvar':
+            # set inner hardening using dadt_rchar, r_gw_crit_9, and alpha_gw_crit
+            self.PARS = dict(
+                desc='set inner hardening using dadt_rchar, r_gw_crit_9, and alpha_gw_crit',
+                hard_inner_model_type=1,
+                hard_outer_time=tout_default,     # [Gyr]
+                hard_rchar=1.0,        # [pc]
+                hard_dadt_rchar=dadt_default,  # [cm/s]
+                hard_gw_crit_units='rg',
+                hard_r_gw_crit_9=r9_default, 
+                hard_alpha_gw_crit=var_value, 
                 hard_gamma_inner=None,
                 hard_inner_time=None,
                 gsmf = holo.sams.GSMF_Double_Schechter()                
@@ -457,21 +506,24 @@ class Test_SAM:
         
 
         
-def create_sams(nreals=5, nloud=5, fpath=_PATH_DATA, suite_type='grid',
-                ai=None, tau=None, gsmf=None, gpfflag=None, 
-                _nuin_default=None, _alph_default=None, _r9_default=None,
+def create_sams(nreals=5, nloud=5, fpath=_PATH_DATA, suite_type='grid', hard_type='fixed2PL',
+                ai=None, tau=None, gsmf=None, gpfflag=None, _tout_default=None,
+                _nuin_default=None, _dadt_default=None, _alph_default=None, _r9_default=None, 
                 pickle_sams=True, pickle_name=None, pickle_name_extra=None):
 
     all_sams = []
     
     if suite_type == 'grid':
+        if hard_type != 'fixed2PL':
+            raise ValueError(f"only hard_type='fixed2PL' allowed for suite_type='grid'.")
+            
         for t in [1.0,3.0]:
             for rc in [10.0, 100.0]:
                 for nin in [-2.0, -0.5]:
                     for nout in [0.0, +2.5]:
                         #for mf in [1,2]:
 
-                        s = Test_SAM(model_type='grid', nreals=nreals, nloud=nloud, 
+                        s = Test_SAM(hard_type=hard_type, model_type='grid', nreals=nreals, nloud=nloud, 
                                      hard_t=t, hard_ai=ai, hard_rc=rc, 
                                      hard_nin=nin, hard_nout=nout,
                                      gsmf_flag = gsmf, gpf_flag=gpfflag)
@@ -499,7 +551,8 @@ def create_sams(nreals=5, nloud=5, fpath=_PATH_DATA, suite_type='grid',
                 tau = 1.0
                 
             print(f'Creating test SAM for model_type {mod} with gpf_flag={gpfflag} & tau={tau}.')
-            s = Test_SAM(model_type=mod, nreals=nreals, nloud=nloud, gpf_flag=gpfflag, hard_t=tau)
+            s = Test_SAM(hard_type=hard_type, model_type=mod, nreals=nreals, nloud=nloud, 
+                         gpf_flag=gpfflag, hard_t=tau)
 
             all_sams = all_sams + [s]
                 
@@ -523,7 +576,8 @@ def create_sams(nreals=5, nloud=5, fpath=_PATH_DATA, suite_type='grid',
                 tau = 5.55
                 
             print(f'Creating test SAM for model_type {mod} with gpf_flag={gpf_list[i]} & tau={tau}.')
-            s = Test_SAM(model_type=mod, nreals=nreals, nloud=nloud, gpf_flag=gpf_list[i], hard_t=tau)
+            s = Test_SAM(hard_type=hard_type, model_type=mod, nreals=nreals, nloud=nloud, 
+                         gpf_flag=gpf_list[i], hard_t=tau)
 
             all_sams = all_sams + [s]
                 
@@ -556,10 +610,12 @@ def create_sams(nreals=5, nloud=5, fpath=_PATH_DATA, suite_type='grid',
             for i in range(len(varied_values[m])):
                 if m=='astr_rc100':
                     print(f'Creating test SAM for model_type {m} w/ tau={tau_vals[i]}.')
-                    s = Test_SAM(model_type=m, nreals=nreals, nloud=nloud, gpf_flag=gpfflag, hard_t=varied_values[m][i])
+                    s = Test_SAM(hard_type=hard_type, model_type=m, nreals=nreals, nloud=nloud, 
+                                 gpf_flag=gpfflag, hard_t=varied_values[m][i])
                 else:
                     print(f'Creating test SAM for model_type {m} w/ {tau_vals[1]=} & {varied_values[m][i]=}.')
-                    s = Test_SAM(model_type=m, nreals=nreals, nloud=nloud, gpf_flag=gpfflag, var_value=varied_values[m][i])
+                    s = Test_SAM(hard_type=hard_type, model_type=m, nreals=nreals, nloud=nloud, 
+                                 gpf_flag=gpfflag, var_value=varied_values[m][i])
 
                 all_sams = all_sams + [s]
                 
@@ -592,10 +648,12 @@ def create_sams(nreals=5, nloud=5, fpath=_PATH_DATA, suite_type='grid',
             for i in range(len(varied_values[m])):
                 if m=='astr_rc100':
                     print(f'Creating test SAM for model_type {m} w/ tau={tau_vals[i]}.')
-                    s = Test_SAM(model_type=m, nreals=nreals, nloud=nloud, gpf_flag=gpfflag, hard_t=varied_values[m][i])
+                    s = Test_SAM(hard_type=hard_type, model_type=m, nreals=nreals, nloud=nloud, 
+                                 gpf_flag=gpfflag, hard_t=varied_values[m][i])
                 else:
                     print(f'Creating test SAM for model_type {m} w/ {tau_vals[1]=} & {varied_values[m][i]=}.')
-                    s = Test_SAM(model_type=m, nreals=nreals, nloud=nloud, gpf_flag=gpfflag, var_value=varied_values[m][i])
+                    s = Test_SAM(hard_type=hard_type, model_type=m, nreals=nreals, nloud=nloud, 
+                                 gpf_flag=gpfflag, var_value=varied_values[m][i])
 
                 all_sams = all_sams + [s]
                 
@@ -618,6 +676,11 @@ def create_sams(nreals=5, nloud=5, fpath=_PATH_DATA, suite_type='grid',
 
     elif 'new_hardening' in suite_type:
 
+        if 'type0' in suite_type and hard_type != 'fixed2PL':
+            raise ValueError(f"{suite_type=} requires hard_type='fixed2PL'.")
+        if 'type1' in suite_type and hard_type != 'fixedOuter':
+            raise ValueError(f"{suite_type=} requires hard_type='fixedOuter'.")
+            
         if gpfflag is not None:
             print(f"WARNING: overriding keyword {gpfflag=} for {suite_type=}. Setting to 0.")
         gpfflag = 0    
@@ -630,6 +693,7 @@ def create_sams(nreals=5, nloud=5, fpath=_PATH_DATA, suite_type='grid',
         varied_values = dict(
             tout=[0.1, 1.0, 10.0],
             nui=[-1.5, -1.0, -0.5, 0.0],
+            dadt=[-10.0, -10.0**2.5, -1.0e4, -10.0**5.5, -1.0e7],
             r9=[30, 100, 300, 1e3, 3e3],
             alph=[-0.5, -1.0/3, -0.25, -0.1, 0.0]
         )
@@ -640,14 +704,18 @@ def create_sams(nreals=5, nloud=5, fpath=_PATH_DATA, suite_type='grid',
         else:
             raise ValueError(f"No unique var name match found for {suite_type=} in {varied_values.keys()=}")
 
-        if varName not in ('nui', 'alph','r9') and None in (_nuin_default,_alph_default,_r9_default):
-            raise ValueError(f"Must set default value of `nui` and `alph` when these parameters are not varied.")
+        # this is sloppy logic, FIX IT
+        #if varName not in ('tout', 'nui', 'alph','r9') and None in (_tout_default,_nuin_default,_alph_default,_r9_default):
+        if varName not in ('tout','alph','r9') and None in (_tout_default,_alph_default,_r9_default):
+            raise ValueError(f"Must set default value of `tout`, `alph`, and `r9` when these parameters are not varied.")
+        
         
         for i in range(len(varied_values[varName])):
             print(f'Creating test SAM for {suite_type=}, {varName=}, var_value={varied_values[varName][i]}.')
-            s = Test_SAM(model_type=suite_type, nreals=nreals, nloud=nloud, gpf_flag=gpfflag, 
-                         nuin_default=_nuin_default, alph_default=_alph_default, r9_default=_r9_default,
-                         var_value=varied_values[varName][i], hard_t=tau, hard_type='fixedOuter')
+            s = Test_SAM(hard_type=hard_type, model_type=suite_type, nreals=nreals, nloud=nloud, gpf_flag=gpfflag, 
+                         nuin_default=_nuin_default, dadt_default=_dadt_default, 
+                         alph_default=_alph_default, r9_default=_r9_default,
+                         var_value=varied_values[varName][i], hard_t=tau)
 
             all_sams = all_sams + [s]
     
