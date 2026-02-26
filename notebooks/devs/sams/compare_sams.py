@@ -109,12 +109,12 @@ class Test_SAM:
                                                          )
         else:
             print(f"{self.PARS['hard_dadt_rchar']=}, {self.PARS['hard_r_gw_crit_9']=}, "
-                  f"{self.PARS['hard_alpha_gw_crit']=}, {self.PARS['hard_gamma_inner']=}, {self.PARS['hard_inner_time']=}") 
+                  f"{self.PARS['hard_alpha_gw_crit']=}, {self.PARS['hard_nu_inner']=}, {self.PARS['hard_inner_time']=}") 
             self.hard = holo.hardening.FixedOuterTime_InnerPL_SAM(self.sam, 
                                                                   inner_model_type = self.PARS['hard_inner_model_type'],
                                                                   outer_time = self.PARS['hard_outer_time']*GYR, 
                                                                   rchar = self.PARS['hard_rchar']*PC,
-                                                                  gamma_inner = self.PARS['hard_gamma_inner'],
+                                                                  nu_inner = self.PARS['hard_nu_inner'],
                                                                   gw_crit_units= self.PARS['hard_gw_crit_units'],
                                                                   r_gw_crit_9 = self.PARS['hard_r_gw_crit_9'],
                                                                   alpha_gw_crit = self.PARS['hard_alpha_gw_crit'],
@@ -326,14 +326,14 @@ class Test_SAM:
                 gsmf = holo.sams.GSMF_Double_Schechter(log10_mstar=[+10.767, +0.124, var_value])
             )
         elif self.model_type == 'new_hardening_type0_toutvar':
-            # set inner hardening using gamma_inner, r_gw_crit_9, and alpha_gw_crit
+            # set inner hardening using nu_inner, r_gw_crit_9, and alpha_gw_crit
             self.PARS = dict(
-                desc='set inner hardening using gamma_inner, r_gw_crit_9, and alpha_gw_crit',
+                desc='set inner hardening using nu_inner, r_gw_crit_9, and alpha_gw_crit',
                 hard_inner_model_type=0,
                 hard_outer_time=var_value,     # [Gyr]
                 hard_rchar=100.0,        # [pc]
-                #hard_gamma_inner=-1.0,
-                hard_gamma_inner=nuin_default,
+                #hard_nu_inner=-1.0,
+                hard_nu_inner=nuin_default,
                 hard_gw_crit_units='rg',
                 hard_r_gw_crit_9=r9_default, 
                 #hard_alpha_gw_crit=-0.25, 
@@ -343,13 +343,13 @@ class Test_SAM:
                 gsmf = holo.sams.GSMF_Double_Schechter()
             )
         elif self.model_type == 'new_hardening_type0_nuivar':
-            # set inner hardening using gamma_inner, r_gw_crit_9, and alpha_gw_crit
+            # set inner hardening using nu_inner, r_gw_crit_9, and alpha_gw_crit
             self.PARS = dict(
-                desc='set inner hardening using gamma_inner, r_gw_crit_9, and alpha_gw_crit',
+                desc='set inner hardening using nu_inner, r_gw_crit_9, and alpha_gw_crit',
                 hard_inner_model_type=0,
                 hard_outer_time=tout_default,     # [Gyr]
                 hard_rchar=100.0,        # [pc]
-                hard_gamma_inner=var_value,
+                hard_nu_inner=var_value,
                 hard_gw_crit_units='rg',
                 hard_r_gw_crit_9=r9_default, 
                 #hard_alpha_gw_crit=-0.25, 
@@ -359,13 +359,13 @@ class Test_SAM:
                 gsmf = holo.sams.GSMF_Double_Schechter()
             )
         elif self.model_type == 'new_hardening_type0_r9var':
-            # set inner hardening using gamma_inner, r_gw_crit_9, and alpha_gw_crit
+            # set inner hardening using nu_inner, r_gw_crit_9, and alpha_gw_crit
             self.PARS = dict(
-                desc='set inner hardening using gamma_inner, r_gw_crit_9, and alpha_gw_crit',
+                desc='set inner hardening using nu_inner, r_gw_crit_9, and alpha_gw_crit',
                 hard_inner_model_type=0,
                 hard_outer_time=tout_default,     # [Gyr]
                 hard_rchar=100.0,        # [pc]
-                hard_gamma_inner=nuin_default,
+                hard_nu_inner=nuin_default,
                 hard_gw_crit_units='rg',
                 hard_r_gw_crit_9=var_value, 
                 hard_alpha_gw_crit=alph_default, 
@@ -374,13 +374,13 @@ class Test_SAM:
                 gsmf = holo.sams.GSMF_Double_Schechter()
             )
         elif self.model_type == 'new_hardening_type0_alphvar':
-            # set inner hardening using gamma_inner, r_gw_crit_9, and alpha_gw_crit
+            # set inner hardening using nu_inner, r_gw_crit_9, and alpha_gw_crit
             self.PARS = dict(
-                desc='set inner hardening using gamma_inner, r_gw_crit_9, and alpha_gw_crit',
+                desc='set inner hardening using nu_inner, r_gw_crit_9, and alpha_gw_crit',
                 hard_inner_model_type=0,
                 hard_outer_time=tout_default,     # [Gyr]
                 hard_rchar=100.0,        # [pc]
-                hard_gamma_inner=nuin_default,
+                hard_nu_inner=nuin_default,
                 hard_gw_crit_units='rg',
                 hard_r_gw_crit_9=r9_default, 
                 hard_alpha_gw_crit=var_value, 
@@ -399,7 +399,7 @@ class Test_SAM:
                 hard_gw_crit_units='rg',
                 hard_r_gw_crit_9=r9_default, 
                 hard_alpha_gw_crit=alph_default, 
-                hard_gamma_inner=None,
+                hard_nu_inner=None,
                 hard_inner_time=None,
                 gsmf = holo.sams.GSMF_Double_Schechter()                
             )
@@ -414,7 +414,7 @@ class Test_SAM:
                 hard_gw_crit_units='rg',
                 hard_r_gw_crit_9=r9_default, 
                 hard_alpha_gw_crit=alph_default, 
-                hard_gamma_inner=None,
+                hard_nu_inner=None,
                 hard_inner_time=None,
                 gsmf = holo.sams.GSMF_Double_Schechter()                
             )
@@ -429,7 +429,7 @@ class Test_SAM:
                 hard_gw_crit_units='rg',
                 hard_r_gw_crit_9=var_value, 
                 hard_alpha_gw_crit=alph_default, 
-                hard_gamma_inner=None,
+                hard_nu_inner=None,
                 hard_inner_time=None,
                 gsmf = holo.sams.GSMF_Double_Schechter()                
             )
@@ -444,7 +444,7 @@ class Test_SAM:
                 hard_gw_crit_units='rg',
                 hard_r_gw_crit_9=r9_default, 
                 hard_alpha_gw_crit=var_value, 
-                hard_gamma_inner=None,
+                hard_nu_inner=None,
                 hard_inner_time=None,
                 gsmf = holo.sams.GSMF_Double_Schechter()                
             )
