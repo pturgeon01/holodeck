@@ -16,7 +16,7 @@ from scipy.optimize.cython_optimize cimport brentq
 from libc.stdio cimport printf, fflush, stdout
 from libc.stdlib cimport malloc, free
 # make sure to use c-native math functions instead of python/numpy
-from libc.math cimport pow, sqrt, M_PI, NAN, log10, sin, cos
+from libc.math cimport pow, sqrt, M_PI, NAN, log10, sin, cos, log
 
 import holodeck as holo
 from holodeck.cyutils cimport interp_at_index, _interp_between_vals
@@ -224,36 +224,55 @@ cdef void _integrate_differential_number_3dx1d(
 
 
 @cython.cdivision(True)
-cdef double _hard_func_innerpwl(double mtot, double mrat, double sepa, int mod_type,
-                                double gamma_inner, double r9, double alpha_gwcrit):
+cdef double _hard_func_innerpwl_model0(double mtot, double mrat, double sepa, 
+                                       double nu_inner, double r9, double alpha_gwcrit):
 
-    if mod_type != 0:
-        raise ValueError(f"mod_type not defined: ", mod_type)
-        
     cdef double r_gwcrit = r9 * pow(mtot/(1.0e9*MY_MSOL), alpha_gwcrit+1)
-    cdef double dadt = hard_gw(mtot, mrat, r_gwcrit) * pow(sepa/r_gwcrit, 1.0-gamma_inner)
+    cdef double dadt = hard_gw(mtot, mrat, r_gwcrit) * pow(sepa/r_gwcrit, 1.0-nu_inner)
+    
+    return dadt
+
+
+@cython.cdivision(True)
+cdef double _hard_func_innerpwl_model1(double mtot, double mrat, double sepa, 
+                                       double dadt_rchar, double rchar, 
+                                       double r9, double alpha_gwcrit):
+
+    cdef double r_gwcrit = r9 * pow(mtot/(1.0e9*MY_MSOL), alpha_gwcrit+1)
+    # "inner" PL and hardening rate
+    if r_gwcrit > rchar:
+        # if this is true, we're in the GW regime anyway
+        cdef double dadt = 0.0
+    else:     
+        cdef double dadt_gw_crit = hard_gw(mtot, mrat, r_gwcrit)
+        cdef double eta_norm = 4 * mrat / (1 + mrat) / (1 + mrat) 
+        cdef double nu_inner = 1.0 - (log(-dadt_gw_crit)-log(-dadt_rchar*eta_norm))/(log(r_gwcrit)-log(rchar))
+        cdef double dadt = dadt_gw_crit * ( sepa / r_gwcrit ) ** (1.0-nu_inner)
+    
     return dadt
 
 
 @cython.cdivision(True)
 cdef double _hard_func_innerpwl_gw(
-    double mtot, double mrat, double sepa,
-    int inner_model_type, double rchar, double gamma_inner, 
+    double mtot, double mrat, double sepa, int inner_model_type, 
+    double dadt_rchar, double rchar, double nu_inner, 
     double r_gwcrit_9, int gwcrit_units_rg, double alpha_gwcrit 
 ):
+
+    if gwcrit_units_rg == 0:
+        cdef double r9 = r_gwcrit_9 * MY_PC 
+    else:
+        cdef double r9 = r_gwcrit_9 * MY_RGRV * 1.0e9*MY_MSOL
+
     if inner_model_type == 0:
-        if gwcrit_units_rg == 0:
-            r9 = r_gwcrit_9 * MY_PC 
-        else:
-            r9 = r_gwcrit_9 * MY_RGRV * 1.0e9*MY_MSOL
+        cdef double dadt = _hard_func_innerpwl_model0(mtot, mrat, sepa,
+                                                      nu_inner, r9, alpha_gwcrit)
     elif inner_model_type == 1:
-        # TO DO
-        raise NotImplementedError()
+        cdef double dadt = _hard_func_innerpwl_model1(mtot, mrat, sepa, dadt_rchar, 
+                                                      rchar, r9, alpha_gwcrit)
     else: 
         raise ValueError(f"inner_model_type not defined: ", inner_model_type)
         
-    cdef double dadt = _hard_func_innerpwl(mtot, mrat, sepa, inner_model_type,
-                                           gamma_inner, r9, alpha_gwcrit)    
     dadt += hard_gw(mtot, mrat, sepa)
     return dadt
 
@@ -537,13 +556,13 @@ def dynamic_binary_number_at_fobs(fobs_orb, sam, hard, cosmo):
             gmt_time = np.zeros(sam.shape)
 
         if hard._gw_crit_units == 'rg':
-            hard_gwcrit_units_rg = 1
+            cdef int hard_gwcrit_units_rg = 1
         else:
-            hard_gwcrit_units_rg = 0
+            cdef int hard_gwcrit_units_rg = 0
             
         _dynamic_binary_number_at_fobs_innerpwl(
             fobs_orb, hard._num_steps, hard._outer_time, 
-            hard._inner_model_type, hard._rchar, hard._gamma_inner,  
+            hard._inner_model_type, hard._dadt_rchar, hard._rchar, hard._nu_inner,  
             hard._r_gw_crit_9, hard_gwcrit_units_rg, hard._alpha_gw_crit,
             nden, sam.mtot, sam.mrat, sam.redz, gmt_time,
             cosmo._grid_z, cosmo._grid_dcom, cosmo._grid_age,
@@ -589,8 +608,9 @@ cdef int _dynamic_binary_number_at_fobs_innerpwl(
 
     double hard_outer_time,
     int hard_inner_model_type,
+    double hard_dadt_rchar,
     double hard_rchar,
-    double hard_gamma_inner,  
+    double hard_nu_inner,  
     double hard_r_gwcrit_9,
     int hard_gwcrit_units_rg,
     double hard_alpha_gwcrit, 
@@ -609,10 +629,10 @@ cdef int _dynamic_binary_number_at_fobs_innerpwl(
     double[:, :, :, :] redz_final,
     double[:, :, :, :] diff_num,
 ) except -1:
-    """Calculate differential binary number at the given frequencies, with phenom 2pl evolution.
+    """Calculate differential binary number at the given frequencies, with inner pl evolution.
 
     This function converts from differential binary volume-density to differential binary number.
-    Binary evolution follows the 'phenomenological' double power-law model implemented in the
+    Binary evolution follows the fixed outer time, inner power-law model implemented in the
     :py:func:`_hard_func_innerpwl_gw`, which matches the implementation in
     :py:class:`FixedOuterTime_InnerPL_SAM`.
 
@@ -699,8 +719,8 @@ cdef int _dynamic_binary_number_at_fobs_innerpwl(
             sepa_left = pow(10.0, sepa_log10)
             #### UPDATED TO NEW FUNCTION ####
             dadt_left =  _hard_func_innerpwl_gw(
-                mt, mr, sepa_left, 
-                hard_inner_model_type, hard_rchar, hard_gamma_inner, 
+                mt, mr, sepa_left, hard_inner_model_type, 
+                hard_dadt_rchar, hard_rchar, hard_nu_inner, 
                 hard_r_gwcrit_9, hard_gwcrit_units_rg, hard_alpha_gwcrit 
             )
 
@@ -718,10 +738,10 @@ cdef int _dynamic_binary_number_at_fobs_innerpwl(
                 frst_orb_right = kepler_freq_from_sepa(mt, sepa_right)
 
                 # Get total hardening rate at the right-edge of this step (left-edge already obtained)
-                #### UPDATED TO NEW FUNCTION ####
+                #### UPDATED TO NEW FUNCTION ####                
                 dadt_right =  _hard_func_innerpwl_gw(
-                    mt, mr, sepa_right, 
-                    hard_inner_model_type, hard_rchar, hard_gamma_inner, 
+                    mt, mr, sepa_right, hard_inner_model_type, 
+                    hard_dadt_rchar, hard_rchar, hard_gamma_inner, 
                     hard_r_gwcrit_9, hard_gwcrit_units_rg, hard_alpha_gwcrit 
                 )
 
@@ -839,8 +859,8 @@ cdef int _dynamic_binary_number_at_fobs_innerpwl(
                         # calculate total hardening rate at this exact separation
                         #### UPDATED TO NEW FUNCTION ####
                         dadt =  _hard_func_innerpwl_gw(
-                            mt, mr, sepa, 
-                            hard_inner_model_type, hard_rchar, hard_gamma_inner, 
+                            mt, mr, sepa, hard_inner_model_type, 
+                            hard_dadt_rchar, hard_rchar, hard_nu_inner, 
                             hard_r_gwcrit_9, hard_gwcrit_units_rg, hard_alpha_gwcrit 
                         )
 
