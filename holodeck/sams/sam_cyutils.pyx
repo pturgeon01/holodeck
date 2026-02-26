@@ -239,15 +239,18 @@ cdef double _hard_func_innerpwl_model1(double mtot, double mrat, double sepa,
                                        double r9, double alpha_gwcrit):
 
     cdef double r_gwcrit = r9 * pow(mtot/(1.0e9*MY_MSOL), alpha_gwcrit+1)
+    cdef double dadt = 0.0
+    cdef double dadt_gw_crit = 0.0
+    cdef double eta_norm = 0.0
+    cdef double nu_inner = 0.0
+    
     # "inner" PL and hardening rate
-    if r_gwcrit > rchar:
-        # if this is true, we're in the GW regime anyway
-        cdef double dadt = 0.0
-    else:     
-        cdef double dadt_gw_crit = hard_gw(mtot, mrat, r_gwcrit)
-        cdef double eta_norm = 4 * mrat / (1 + mrat) / (1 + mrat) 
-        cdef double nu_inner = 1.0 - (log(-dadt_gw_crit)-log(-dadt_rchar*eta_norm))/(log(r_gwcrit)-log(rchar))
-        cdef double dadt = dadt_gw_crit * ( sepa / r_gwcrit ) ** (1.0-nu_inner)
+    # if this isn't true, we're in the GW regime anyway
+    if r_gwcrit < rchar:
+        dadt_gw_crit = hard_gw(mtot, mrat, r_gwcrit)
+        eta_norm = 4 * mrat / (1 + mrat) / (1 + mrat) 
+        nu_inner = 1.0 - (log(-dadt_gw_crit)-log(-dadt_rchar*eta_norm))/(log(r_gwcrit)-log(rchar))
+        dadt = dadt_gw_crit * ( sepa / r_gwcrit ) ** (1.0-nu_inner)
     
     return dadt
 
@@ -259,21 +262,25 @@ cdef double _hard_func_innerpwl_gw(
     double r_gwcrit_9, int gwcrit_units_rg, double alpha_gwcrit 
 ):
 
+    cdef double r9 = 0.0
+    cdef double dadt = 0.0
+    
     if gwcrit_units_rg == 0:
-        cdef double r9 = r_gwcrit_9 * MY_PC 
+        r9 = r_gwcrit_9 * MY_PC 
     else:
-        cdef double r9 = r_gwcrit_9 * MY_RGRV * 1.0e9*MY_MSOL
+        r9 = r_gwcrit_9 * MY_RGRV * 1.0e9*MY_MSOL
 
     if inner_model_type == 0:
-        cdef double dadt = _hard_func_innerpwl_model0(mtot, mrat, sepa,
-                                                      nu_inner, r9, alpha_gwcrit)
+        dadt = _hard_func_innerpwl_model0(mtot, mrat, sepa,
+                                          nu_inner, r9, alpha_gwcrit)
     elif inner_model_type == 1:
-        cdef double dadt = _hard_func_innerpwl_model1(mtot, mrat, sepa, dadt_rchar, 
-                                                      rchar, r9, alpha_gwcrit)
+        dadt = _hard_func_innerpwl_model1(mtot, mrat, sepa, dadt_rchar, 
+                                          rchar, r9, alpha_gwcrit)
     else: 
         raise ValueError(f"inner_model_type not defined: ", inner_model_type)
         
     dadt += hard_gw(mtot, mrat, sepa)
+    
     return dadt
 
 
@@ -523,6 +530,7 @@ def dynamic_binary_number_at_fobs(fobs_orb, sam, hard, cosmo):
     shape = sam.shape + (fobs_orb.size,)
     cdef np.ndarray[np.double_t, ndim=4] diff_num = np.zeros(shape)
     cdef np.ndarray[np.double_t, ndim=4] redz_final = -1.0 * np.ones(shape)
+    cdef int hard_gwcrit_units_rg
 
     sam._log.info("checking class type of `hard`...")
                   
@@ -556,9 +564,9 @@ def dynamic_binary_number_at_fobs(fobs_orb, sam, hard, cosmo):
             gmt_time = np.zeros(sam.shape)
 
         if hard._gw_crit_units == 'rg':
-            cdef int hard_gwcrit_units_rg = 1
+            hard_gwcrit_units_rg = 1
         else:
-            cdef int hard_gwcrit_units_rg = 0
+            hard_gwcrit_units_rg = 0
             
         _dynamic_binary_number_at_fobs_innerpwl(
             fobs_orb, hard._num_steps, hard._outer_time, 
@@ -741,7 +749,7 @@ cdef int _dynamic_binary_number_at_fobs_innerpwl(
                 #### UPDATED TO NEW FUNCTION ####                
                 dadt_right =  _hard_func_innerpwl_gw(
                     mt, mr, sepa_right, hard_inner_model_type, 
-                    hard_dadt_rchar, hard_rchar, hard_gamma_inner, 
+                    hard_dadt_rchar, hard_rchar, hard_nu_inner, 
                     hard_r_gwcrit_9, hard_gwcrit_units_rg, hard_alpha_gwcrit 
                 )
 
