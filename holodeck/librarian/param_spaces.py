@@ -1,7 +1,9 @@
 """Parameter-Space definitions for holodeck libraries.
 """
 
+import numpy as np
 import holodeck as holo
+from holodeck import utils
 from holodeck.constants import GYR, PC, MSOL
 from holodeck.librarian.lib_tools import _Param_Space, PD_Uniform, PD_Normal, PD_Uniform_Log, PD_MVNormal
 
@@ -382,6 +384,47 @@ class PS_Astro_Strong_GSMF(_PS_Astro_Strong):
         return
 
 
+# --- GSMF Covariance Data (Leja+2020) ---
+GSMF_COV_NAMES = [
+    "gsmf_log10_phi_one_z0", "gsmf_log10_phi_one_z1", "gsmf_log10_phi_one_z2",
+    "gsmf_log10_phi_two_z0", "gsmf_log10_phi_two_z1", "gsmf_log10_phi_two_z2",
+    "gsmf_log10_mstar_z0", "gsmf_log10_mstar_z1", "gsmf_log10_mstar_z2",
+    "gsmf_alpha_one", "gsmf_alpha_two"
+]
+GSMF_COV_MEANS = [
+    -2.38282317, -0.26438520, -0.10710090,
+    -2.81825115, -0.36823094,  0.04588269,
+    10.76657073,  0.12372112, -0.03305944,
+    -0.40, -1.53
+]
+GSMF_COV_MATRIX = [
+    [7.71845702e-04, 0.0, 0.0, -4.93217511e-04, 0.0, 0.0, -5.41905826e-05, 0.0, 0.0, -4.70101882e-05, 4.49073003e-05],
+    [0.0, 5.03709503e-03, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 9.11629063e-04, 0.0, -1.03981583e-03, -7.52212747e-06, 0.0, 0.0, 0.0, 0.0, 0.0],
+    [-4.93217511e-04, 0.0, 0.0, 2.60017399e-03, 0.0, 0.0, -1.17452590e-04, 0.0, 0.0, 2.86532467e-03, 9.73320176e-05],
+    [0.0, 0.0, -1.03981583e-03, 0.0, 4.78471584e-03, 1.23129707e-03, 0.0, 0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, -7.52212747e-06, 0.0, 1.23129707e-03, 4.15501713e-04, 0.0, 0.0, 0.0, 0.0, 0.0],
+    [-5.41905826e-05, 0.0, 0.0, -1.17452590e-04, 0.0, 0.0, 7.67139396e-04, 0.0, 0.0, -1.13907523e-03, -1.00951247e-04],
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.95602560e-03, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.33880672e-04, 0.0, 0.0],
+    [-4.70101882e-05, 0.0, 0.0, 2.86532467e-03, 0.0, 0.0, -1.13907523e-03, 0.0, 0.0, 4.99167584e-03, 5.42425058e-04],
+    [4.49073003e-05, 0.0, 0.0, 9.73320176e-05, 0.0, 0.0, -1.00951247e-04, 0.0, 0.0, 5.42425058e-04, 3.08657487e-04],
+]
+
+
+class PS_Astro_Strong_Covariant_GSMF(_PS_Astro_Strong):
+    def __init__(self, log=None, nsamples=None, sam_shape=None, seed=None):
+        parameters = [
+            PD_MVNormal(GSMF_COV_NAMES, GSMF_COV_MEANS, np.array(GSMF_COV_MATRIX)),
+        ]
+
+        _Param_Space.__init__(
+            self, parameters,
+            log=log, nsamples=nsamples, sam_shape=sam_shape, seed=seed,
+        )
+        return
+
+
 class PS_Astro_Strong_GMR(_PS_Astro_Strong):
 
     def __init__(self, log=None, nsamples=None, sam_shape=None, seed=None):
@@ -483,18 +526,8 @@ class PS_Astro_Strong_Covariant_All(_PS_Astro_Strong):
             PD_Uniform("hard_gamma_inner", -2.0, +0.0, default=-1.0),
             PD_Uniform("hard_rchar", 2.0, 20.0, default=10.0),    # [pc]
 
-            # GSMF ## This will become covariant
-            PD_Normal('gsmf_log10_phi_one_z0', -2.383, 0.028),    # - 2.383 ± 0.028
-            PD_Normal('gsmf_log10_phi_one_z1', -0.264, 0.072),    # - 0.264 ± 0.072
-            PD_Normal('gsmf_log10_phi_one_z2', -0.107, 0.031),    # - 0.107 ± 0.031
-            PD_Normal('gsmf_log10_phi_two_z0', -2.818, 0.050),    # - 2.818 ± 0.050
-            PD_Normal('gsmf_log10_phi_two_z1', -0.368, 0.070),    # - 0.368 ± 0.070
-            PD_Normal('gsmf_log10_phi_two_z2', +0.046, 0.020),    # + 0.046 ± 0.020
-            PD_Normal('gsmf_log10_mstar_z0', +10.767, 0.026),     # +10.767 ± 0.026
-            PD_Normal('gsmf_log10_mstar_z1', +0.124, 0.045),      # + 0.124 ± 0.045
-            PD_Normal('gsmf_log10_mstar_z2', -0.033, 0.015),      # - 0.033 ± 0.015
-            PD_Normal('gsmf_alpha_one', -0.28, 0.070),            # - 0.280 ± 0.070
-            PD_Normal('gsmf_alpha_two', -1.48, 0.150),            # - 1.480 ± 0.150
+            # GSMF
+            PD_MVNormal(GSMF_COV_NAMES, GSMF_COV_MEANS, np.array(GSMF_COV_MATRIX)),
 
             # GMR ## This could become covariant, but Kayhan will have to look harder at the papers
             PD_Normal('gmr_norm0_log10', -2.2287, 0.0045),        # -2.2287 ± 0.0045    A0 [log10(A*Gyr)]
@@ -535,5 +568,6 @@ _param_spaces_dict = {
     'PS_Astro_Strong_MMBulge_BFrac': PS_Astro_Strong_MMBulge_BFrac,
     'PS_Test_Astro_Strong_Covariant_MMBulge': PS_Test_Astro_Strong_Covariant_MMBulge,
     'PS_Astro_Strong_Covariant_All' : PS_Astro_Strong_Covariant_All,
+    'PS_Astro_Strong_Covariant_GSMF' : PS_Astro_Strong_Covariant_GSMF,
 }
 

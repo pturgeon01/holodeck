@@ -736,7 +736,10 @@ class PD_MVNormal(_Param_Dist):
             self._L = cholesky(cov) # Renamed to _L
         except LinAlgError:
             # If the decomposition fails, the matrix is not positive definite.
-            raise AssertionError("Covariance matrix must be positive definite (non-degenerate).")
+            raise AssertionError(
+                "Covariance matrix must be positive definite (non-degenerate). "
+                "Consider using `holodeck.utils.repair_covariance(cov)`."
+            )
 
         # 2. Check for Symmetry (Physical requirement for covariance)
         assert np.allclose(cov, cov.T), "Covariance matrix must be symmetric."
