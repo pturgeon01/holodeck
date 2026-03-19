@@ -566,7 +566,9 @@ class _Param_Dist(abc.ABC):
                 clip = clip.reshape(1, 2)
             else:
                 raise ValueError(
-                    f"The 'clip' argument must be array-like with shape (n_dims, 2) for multivariate distributions, or (2,) for single-parameter distributions: [lower_bound, upper_bound]. got {clip.shape}!"
+                    "The 'clip' argument must be array-like with shape (n_dims, 2) for "
+                    "multivariate distributions, or (2,) for single-parameter distributions: "
+                    f"[lower_bound, upper_bound]. got {clip.shape}!"
                 )
         self._clip = clip
         self._name = name
@@ -589,7 +591,8 @@ class _Param_Dist(abc.ABC):
             n_dims_check = n_dims if n_dims is not None else self._clip.shape[0]
             if self._clip.shape[0] != n_dims_check:
                 raise ValueError(
-                    f"Internal error: The 'clip' array has {self._clip.shape[0]} rows, but the distribution requires {n_dims_check} parameters."
+                    f"Internal error: The 'clip' array has {self._clip.shape[0]} rows, "
+                    f"but the distribution requires {n_dims_check} parameters."
                 )
             lower_bounds = self._clip[:, 0]
             upper_bounds = self._clip[:, 1]
@@ -629,6 +632,7 @@ class _Param_Dist(abc.ABC):
         uniform_bounds[1, :] = 1.0
 
         import warnings
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             transformed_bounds = self(uniform_bounds)
