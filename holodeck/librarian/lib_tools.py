@@ -1,5 +1,4 @@
-"""Parameters and parameter spaces for holodeck libraries.
-"""
+"""Parameters and parameter spaces for holodeck libraries."""
 
 import abc
 import os
@@ -15,8 +14,12 @@ import holodeck as holo
 from holodeck import utils, cosmo, log
 from holodeck.constants import YR
 from holodeck.librarian import (
-    DEF_NUM_FBINS, DEF_NUM_LOUDEST, DEF_NUM_REALS, DEF_PTA_DUR,
-    FNAME_LIBRARY_COMBINED_FILE, FNAME_DOMAIN_COMBINED_FILE,
+    DEF_NUM_FBINS,
+    DEF_NUM_LOUDEST,
+    DEF_NUM_REALS,
+    DEF_PTA_DUR,
+    FNAME_LIBRARY_COMBINED_FILE,
+    FNAME_DOMAIN_COMBINED_FILE,
 )
 
 PARAM_NAMES__ERROR = [
@@ -41,9 +44,7 @@ class _Param_Space(abc.ABC):
 
     __version__ = "0.0"
 
-    _SAVED_ATTRIBUTES = [
-        "sam_shape", "param_names", "_uniform_samples", "param_samples", "_nsamples", "_nparameters"
-    ]
+    _SAVED_ATTRIBUTES = ["sam_shape", "param_names", "_uniform_samples", "param_samples", "_nsamples", "_nparameters"]
 
     DEFAULTS = {}
 
@@ -127,19 +128,16 @@ class _Param_Space(abc.ABC):
                 self._nparameters += 1
             self._param_dist_names.append(pdist_name)
 
-
-
         if (self._nsamples is None) or (self._nparameters == 0):
             log.info(f"{self}: {self._nsamples=} {self._nparameters=} - cannot generate parameter samples.")
             self._uniform_samples = None
-            self._param_samples = None
+            self.param_samples = None
         else:
             # if strength = 2, then n must be equal to p**2, with p prime, and d <= p + 1
             lhc = sp.stats.qmc.LatinHypercube(d=self._nparameters, strength=1, seed=self._seed)
             # (S, D) - samples, dimensions
             self._uniform_samples = lhc.random(n=self._nsamples)
             self.param_samples = self._transform_samples()
-
 
         self._log = log
         return
@@ -214,7 +212,6 @@ class _Param_Space(abc.ABC):
 
         settings = self.DEFAULTS.copy()
         for name, value in params.items():
-
             for pname, replace in PARAM_NAMES_REPLACE.items():
                 if pname != name:
                     continue
@@ -339,7 +336,10 @@ class _Param_Space(abc.ABC):
             data[key] = getattr(self, key)
 
         np.savez(
-            fname, class_name=class_name, class_vers=class_vers, librarian_version=vers,
+            fname,
+            class_name=class_name,
+            class_vers=class_vers,
+            librarian_version=vers,
             **data,
         )
 
@@ -367,7 +367,7 @@ class _Param_Space(abc.ABC):
 
         # get the name of the parameter-space class from the file, and try to find this class in the
         # `holodeck.param_spaces` module
-        class_name = data['class_name'][()]
+        class_name = data["class_name"][()]
         log.debug(f"loaded: {class_name=}, vers={data['librarian_version']}")
         pspace_class = holo.librarian.param_spaces_dict.get(class_name, None)
         # if it is not found, default to the current class/subclass
@@ -376,23 +376,20 @@ class _Param_Space(abc.ABC):
             pspace_class = cls
 
         # construct instance with dummy/temporary values (which will be overwritten)
-        if np.all(data['param_samples'] == None):   # noqa: E711
+        if np.all(data["param_samples"] == None):  # noqa: E711
             nsamples = None
             nparameters = None
         else:
             # print(f"{data['param_samples']=}")
-            nsamples = data['param_samples'].shape[0]
-            nparameters = data['param_samples'].shape[1]
-        param_names = data['param_names']
+            nsamples = data["param_samples"].shape[0]
+            nparameters = data["param_samples"].shape[1]
+        param_names = data["param_names"]
         space = pspace_class(nsamples=nsamples, log=log)
         if class_name != space.name:
             err = "loaded class name '{class_name}' does not match this class's name '{space.name}'!"
             log.warning(err)
         if not all([pname_load == pname_class for pname_load, pname_class in zip(param_names, space.param_names)]):
-            err = (
-                f"Mismatch between loaded parameter names ({param_names}) "
-                f"and class parameter names ({space.param_names})!"
-            )
+            err = f"Mismatch between loaded parameter names ({param_names}) and class parameter names ({space.param_names})!"
             log.exception(err)
 
             for pn in param_names:
@@ -412,9 +409,9 @@ class _Param_Space(abc.ABC):
                 val = data[key][()]
             # Handle special elements that may not be saved in older files
             except KeyError:
-                if key == '_nsamples':
+                if key == "_nsamples":
                     val = nsamples
-                elif key == '_nparameters':
+                elif key == "_nparameters":
                     val = nparameters
                 else:
                     raise
@@ -501,14 +498,27 @@ class _Param_Space(abc.ABC):
         assert all_finite, f"Not all `vals` are finite!  {vals}"
 
         params = {}
-        for ii, pname in enumerate(self.param_names):
-            param = self._parameters[ii]      # this parameter distribution
-            vv = vals[ii]                     # fractional parameter value [0.0, 1.0] or `None`
-            if vv is None:
+        idx = 0
+        for param in self._parameters:
+            n_dims = param.n_params if param.n_params is not None else 1
+            vv = vals[idx : idx + n_dims]
+            idx += n_dims
+
+            if all(v is None for v in vv):
                 ss = param.default
             else:
-                ss = param(vv)                # convert from fractional to actual values
-            params[pname] = ss                # store to dictionary
+                if any(v is None for v in vv):
+                    raise ValueError(f"Cannot partially specify values for multivariate parameter {param.name}")
+                if n_dims == 1:
+                    ss = param(vv[0])  # convert from fractional to actual values
+                else:
+                    ss = param([vv])[0]
+
+            if n_dims == 1:
+                params[param.name] = ss  # store to dictionary
+            else:
+                for pname, s in zip(param.name, ss):
+                    params[pname] = s
 
         return params
 
@@ -522,7 +532,13 @@ class _Param_Space(abc.ABC):
             returned from the :class:`_Param_Dist` subclass.
 
         """
-        params = {param.name: param.default for param in self._parameters}
+        params = {}
+        for param in self._parameters:
+            if isinstance(param.name, (list, tuple)):
+                for pname, val in zip(param.name, param.default):
+                    params[pname] = val
+            else:
+                params[param.name] = param.default
         return params
 
 
@@ -549,9 +565,9 @@ class _Param_Dist(abc.ABC):
             elif clip.ndim == 1 and clip.shape[0] == 2:
                 clip = clip.reshape(1, 2)
             else:
-                raise ValueError(f"The 'clip' argument must be array-like with shape (n_dims, 2)\
-                                  for multivariate distributions, or (2,) for single-parameter distributions:\
-                                  [lower_bound, upper_bound]. got {clip.shape}!")
+                raise ValueError(
+                    f"The 'clip' argument must be array-like with shape (n_dims, 2) for multivariate distributions, or (2,) for single-parameter distributions: [lower_bound, upper_bound]. got {clip.shape}!"
+                )
         self._clip = clip
         self._name = name
         self._default = default
@@ -563,16 +579,18 @@ class _Param_Dist(abc.ABC):
 
         if n_dims is not None:
             if xx.ndim != 2:
-                raise ValueError(f"Input samples 'xx' must be 2-dimensional \
-                                 (n_samples, n_dims) for this {n_dims}-parameter distribution! got {xx.ndim=}")
+                raise ValueError(
+                    f"Input samples 'xx' must be 2-dimensional (n_samples, n_dims) for this {n_dims}-parameter distribution! got {xx.ndim=}"
+                )
             if xx.shape[1] != n_dims:
                 raise ValueError(f"Input samples 'xx'has {xx.shape[1]} dimensions but distribution requires {n_dims} parameters.")
         rv = self._dist_func(xx)
         if self._clip is not None:
             n_dims_check = n_dims if n_dims is not None else self._clip.shape[0]
             if self._clip.shape[0] != n_dims_check:
-                raise ValueError(f"Internal error: The 'clip' array has {self._clip.shape[0]} rows, but the distribution requires \
-                                 {n_dims_check} parameters.")
+                raise ValueError(
+                    f"Internal error: The 'clip' array has {self._clip.shape[0]} rows, but the distribution requires {n_dims_check} parameters."
+                )
             lower_bounds = self._clip[:, 0]
             upper_bounds = self._clip[:, 1]
             rv = np.clip(rv, lower_bounds, upper_bounds)
@@ -595,14 +613,28 @@ class _Param_Dist(abc.ABC):
         if isinstance(self._name, (list, tuple)):
             return len(self._name)
         return None
+
     @property
     def extrema(self):
         """Return the extrema (min, max) of this parameter distribution."""
         n = self.n_params if self.n_params is not None else 1
+
+        if self._clip is not None:
+            result = self._clip
+            if n == 1:
+                result = result.squeeze()
+            return result
+
         uniform_bounds = np.zeros((2, n))
         uniform_bounds[1, :] = 1.0
-        transformed_bounds = self(uniform_bounds)
+
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            transformed_bounds = self(uniform_bounds)
+
         result = transformed_bounds.T
+
         if n == 1:
             result = result.squeeze()
         return result
@@ -629,11 +661,16 @@ class _Param_Dist(abc.ABC):
         if self._default is not None:
             return self._default
 
-        return self(0.5)
+        n = self.n_params
+        if n is None:
+            # Univariate case: pass a scalar, get a scalar back
+            return self(0.5)
+        # Multivariate case: __call__ requires a 2D array of shape (n_samples, n_dims).
+        # Pass a single sample of all-0.5 values, then squeeze to a 1D array.
+        return self(np.full((1, n), 0.5)).squeeze()
 
 
 class PD_Uniform(_Param_Dist):
-
     def __init__(self, name, lo, hi, **kwargs):
         super().__init__(name, **kwargs)
         self._lo = lo
@@ -646,7 +683,6 @@ class PD_Uniform(_Param_Dist):
 
 
 class PD_Uniform_Log(_Param_Dist):
-
     def __init__(self, name, lo, hi, **kwargs):
         super().__init__(name, **kwargs)
         assert lo > 0.0 and hi > 0.0
@@ -692,6 +728,7 @@ class PD_Normal(_Param_Dist):
         yy = self._frozen_dist.ppf(xx)
         return yy
 
+
 class PD_MVNormal(_Param_Dist):
     """Multi-variate Normal/Gaussian parameter distribution with given means and covariance matrix.
 
@@ -723,8 +760,9 @@ class PD_MVNormal(_Param_Dist):
         # --- SIZE AND DIMENSION CHECKS ---
         assert cov.ndim == 2, "Covariance matrix must be 2-dimensional."
         assert cov.shape[0] == cov.shape[1], "Covariance matrix must be square (n x n)."
-        assert cov.shape[0] == n_params, f"The number of names ({n_params}) must match the dimension of the covariance matrix \
-            ({cov.shape[0]})."
+        assert cov.shape[0] == n_params, (
+            f"The number of names ({n_params}) must match the dimension of the covariance matrix ({cov.shape[0]})."
+        )
         assert means.ndim == 1, "Mean vector must be 1-dimensional."
         assert len(means) == n_params, f"The length of the means vector ({len(means)}) must match the number of parameters ({n_params})."
 
@@ -733,12 +771,11 @@ class PD_MVNormal(_Param_Dist):
         # 1. Positive Definiteness Check & Store Cholesky Factor (Single Call)
         # Cholesky decomposition only succeeds for Positive Definite matrices.
         try:
-            self._L = cholesky(cov) # Renamed to _L
+            self._L = cholesky(cov)  # Renamed to _L
         except LinAlgError:
             # If the decomposition fails, the matrix is not positive definite.
             raise AssertionError(
-                "Covariance matrix must be positive definite (non-degenerate). "
-                "Consider using `holodeck.utils.repair_covariance(cov)`."
+                "Covariance matrix must be positive definite (non-degenerate). Consider using `holodeck.utils.repair_covariance(cov)`."
             )
 
         # 2. Check for Symmetry (Physical requirement for covariance)
@@ -749,7 +786,7 @@ class PD_MVNormal(_Param_Dist):
 
         self._names = names
         self._cov = cov
-        self._means = means # Stored as _means
+        self._means = means  # Stored as _means
 
         # Create the frozen SciPy distribution (Accessed via sp.stats)
         self._frozen_dist = sp.stats.multivariate_normal(mean=means, cov=cov)
@@ -763,22 +800,33 @@ class PD_MVNormal(_Param_Dist):
         """
         # 1. Transform uniform samples into standard normal samples (zz ~ N(0, I))
         # zz has mean 0 and covariance I (identity)
-        zz = sp.stats.norm.ppf(xx) # Accessed via sp.stats
+        zz = sp.stats.norm.ppf(xx)  # Accessed via sp.stats
 
         # 2. Apply the Cholesky factor (_L) and add the means vector (mu)
         # y = mu + _L @ z.T (then transpose back)
         # This transforms N(0, I) to N(mu, Sigma=_L*_L.T)
-        yy = np.dot(self._L, zz.T).T + self._means # Used _L and _means
+        yy = np.dot(self._L, zz.T).T + self._means  # Used _L and _means
 
         return yy
+
+    @property
+    def extrema(self):
+        """Return the analytical extrema (min, max) of this parameter distribution.
+
+        Multivariate Gaussians gracefully extend to infinity in all dimensions if unclipped.
+        """
+        if self._clip is not None:
+            return self._clip
+
+        return np.full((self.n_params, 2), [-np.inf, np.inf])
 
     @property
     def n_params(self):
         """Overrides base class to return the number of dimensions."""
         return len(self._names)
 
-class PD_Lin_Log(_Param_Dist):
 
+class PD_Lin_Log(_Param_Dist):
     def __init__(self, name, lo, hi, crit, lofrac, **kwargs):
         """Distribute linearly below a cutoff, and then logarithmically above.
 
@@ -811,7 +859,7 @@ class PD_Lin_Log(_Param_Dist):
         yy = np.empty_like(xx)
 
         # select points below the cutoff
-        loidx = (xx <= lofrac)
+        loidx = xx <= lofrac
         # transform to linear-scaling between [lo, crit]
         yy[loidx] = lo + xx[loidx] * (crit - lo) / lofrac
 
@@ -824,7 +872,6 @@ class PD_Lin_Log(_Param_Dist):
 
 
 class PD_Log_Lin(_Param_Dist):
-
     def __init__(self, name, lo, hi, crit, lofrac, **kwargs):
         """Distribute logarithmically below a cutoff, and then linearly above.
 
@@ -858,7 +905,7 @@ class PD_Log_Lin(_Param_Dist):
         yy = np.empty_like(xx)
 
         # select points below the cutoff
-        loidx = (xx <= lofrac)
+        loidx = xx <= lofrac
         # transform to log-scaling between [lo, crit]
         temp = l10_lo + (l10_crit - l10_lo) * xx[loidx] / lofrac
         yy[loidx] = np.power(10.0, temp)
@@ -871,7 +918,6 @@ class PD_Log_Lin(_Param_Dist):
 
 
 class PD_Piecewise_Uniform_Mass(_Param_Dist):
-
     def __init__(self, name, edges, weights, **kwargs):
         super().__init__(name, **kwargs)
         edges = np.asarray(edges)
@@ -890,7 +936,7 @@ class PD_Piecewise_Uniform_Mass(_Param_Dist):
         xlo = 0.0
         for ii, ww in enumerate(self._weights):
             ylo = self._edges[ii]
-            yhi = self._edges[ii+1]
+            yhi = self._edges[ii + 1]
 
             xhi = xlo + ww
             sel = (xlo < xx) & (xx <= xhi)
@@ -902,7 +948,6 @@ class PD_Piecewise_Uniform_Mass(_Param_Dist):
 
 
 class PD_Piecewise_Uniform_Density(PD_Piecewise_Uniform_Mass):
-
     def __init__(self, name, edges, densities, **kwargs):
         dx = np.diff(edges)
         weights = dx * np.asarray(densities)
@@ -911,9 +956,16 @@ class PD_Piecewise_Uniform_Density(PD_Piecewise_Uniform_Mass):
 
 
 def run_model(
-    sam, hard,
-    pta_dur=DEF_PTA_DUR, nfreqs=DEF_NUM_FBINS, nreals=DEF_NUM_REALS, nloudest=DEF_NUM_LOUDEST,
-    gwb_flag=True, singles_flag=True, details_flag=False, params_flag=False,
+    sam,
+    hard,
+    pta_dur=DEF_PTA_DUR,
+    nfreqs=DEF_NUM_FBINS,
+    nreals=DEF_NUM_REALS,
+    nloudest=DEF_NUM_LOUDEST,
+    gwb_flag=True,
+    singles_flag=True,
+    details_flag=False,
+    params_flag=False,
     log=None,
 ):
     """Run the given SAM and hardening model to construct a binary population and GW signatures.
@@ -983,13 +1035,13 @@ def run_model(
 
     data = {}
 
-    fobs_cents, fobs_edges = utils.pta_freqs(dur=pta_dur*YR, num=nfreqs)
+    fobs_cents, fobs_edges = utils.pta_freqs(dur=pta_dur * YR, num=nfreqs)
     # convert from GW to orbital frequencies
     fobs_orb_cents = fobs_cents / 2.0
     fobs_orb_edges = fobs_edges / 2.0
 
-    data['fobs_cents'] = fobs_cents
-    data['fobs_edges'] = fobs_edges
+    data["fobs_cents"] = fobs_cents
+    data["fobs_edges"] = fobs_edges
 
     if not isinstance(hard, (holo.hardening.Fixed_Time_2PL_SAM, holo.hardening.Hard_GW)):
         err = f"`holo.hardening.Fixed_Time_2PL_SAM` must be used here!  Not {hard}!"
@@ -997,46 +1049,48 @@ def run_model(
             log.exception(err)
         raise RuntimeError(err)
 
-    redz_final, diff_num = sam_cyutils.dynamic_binary_number_at_fobs(
-        fobs_orb_cents, sam, hard, cosmo
-    )
+    redz_final, diff_num = sam_cyutils.dynamic_binary_number_at_fobs(fobs_orb_cents, sam, hard, cosmo)
     use_redz = redz_final
     edges = [sam.mtot, sam.mrat, sam.redz, fobs_orb_edges]
     number = sam_cyutils.integrate_differential_number_3dx1d(edges, diff_num)
     if details_flag:
-        data['static_binary_density'] = sam.static_binary_density
-        data['number'] = number
-        data['redz_final'] = redz_final
+        data["static_binary_density"] = sam.static_binary_density
+        data["number"] = number
+        data["redz_final"] = redz_final
 
         gwb_pars, num_pars, gwb_mtot_redz_final, num_mtot_redz_final = _calc_model_details(edges, redz_final, number)
 
-        data['gwb_params'] = gwb_pars
-        data['num_params'] = num_pars
-        data['gwb_mtot_redz_final'] = gwb_mtot_redz_final
-        data['num_mtot_redz_final'] = num_mtot_redz_final
+        data["gwb_params"] = gwb_pars
+        data["num_params"] = num_pars
+        data["gwb_mtot_redz_final"] = gwb_mtot_redz_final
+        data["num_mtot_redz_final"] = num_mtot_redz_final
 
     # calculate single sources and/or binary parameters
     if singles_flag or params_flag:
         nloudest = nloudest if singles_flag else 1
 
         vals = holo.single_sources.ss_gws_redz(
-            edges, use_redz, number, realize=nreals,
-            loudest=nloudest, params=params_flag,
+            edges,
+            use_redz,
+            number,
+            realize=nreals,
+            loudest=nloudest,
+            params=params_flag,
         )
         if params_flag:
             hc_ss, hc_bg, sspar, bgpar = vals
-            data['sspar'] = sspar
-            data['bgpar'] = bgpar
+            data["sspar"] = sspar
+            data["bgpar"] = bgpar
         else:
             hc_ss, hc_bg = vals
 
         if singles_flag:
-            data['hc_ss'] = hc_ss
-            data['hc_bg'] = hc_bg
+            data["hc_ss"] = hc_ss
+            data["hc_bg"] = hc_bg
 
     if gwb_flag:
         gwb = holo.gravwaves._gws_from_number_grid_integrated_redz(edges, use_redz, number, nreals)
-        data['gwb'] = gwb
+        data["gwb"] = gwb
 
     return data
 
@@ -1110,30 +1164,22 @@ def _calc_model_details(edges, redz_final, number):
     for ii in range(nfreqs):
         rz_flat = rz[:, :, :, ii].flatten()
         # calculate GWB-weighted average final-redshift
-        numer, *_ = sp.stats.binned_statistic(
-            rz_flat, hc2_num[:, :, :, ii].flatten(), bins=redz, statistic='sum'
-        )
+        numer, *_ = sp.stats.binned_statistic(rz_flat, hc2_num[:, :, :, ii].flatten(), bins=redz, statistic="sum")
         tpar = numer / denom[ii]
         gwb_rz[:, ii] = tpar
 
         # calculate average final-redshift (number weighted)
-        tpar, *_ = sp.stats.binned_statistic(
-            rz_flat, number[:, :, :, ii].flatten(), bins=redz, statistic='sum'
-        )
+        tpar, *_ = sp.stats.binned_statistic(rz_flat, number[:, :, :, ii].flatten(), bins=redz, statistic="sum")
         num_rz[:, ii] = tpar
 
         # Get values vs. mtot for redz-final
         for mm in range(nmbins):
             rz_flat = rz[mm, :, :, ii].flatten()
-            numer, *_ = sp.stats.binned_statistic(
-                rz_flat, hc2_num[mm, :, :, ii].flatten(), bins=redz, statistic='sum'
-            )
+            numer, *_ = sp.stats.binned_statistic(rz_flat, hc2_num[mm, :, :, ii].flatten(), bins=redz, statistic="sum")
             tpar = numer / denom[ii]
             gwb_mtot_redz_final[mm, :, ii] = tpar
 
-            tpar, *_ = sp.stats.binned_statistic(
-                rz_flat, number[mm, :, :, ii].flatten(), bins=redz, statistic='sum'
-            )
+            tpar, *_ = sp.stats.binned_statistic(rz_flat, number[mm, :, :, ii].flatten(), bins=redz, statistic="sum")
             num_mtot_redz_final[mm, :, ii] = tpar
 
     gwb_pars.append(gwb_rz)
@@ -1194,7 +1240,7 @@ def load_pspace_from_path(path, space_class=None):
 
     if space_class is None:
         try:
-            space_class = str(np.load(space_fname, allow_pickle=True)['class_name'])
+            space_class = str(np.load(space_fname, allow_pickle=True)["class_name"])
             space_class = holo.librarian.param_spaces_dict[space_class]
         except Exception as err:
             log.error(f"Could not load `class_name` from save file '{space_fname}'.")
@@ -1241,10 +1287,9 @@ def get_sam_lib_fname(path, gwb_only, library=True):
 
 
 def get_fits_path(library_path):
-    """Get the name of the spectral fits file, given a library file path.
-    """
+    """Get the name of the spectral fits file, given a library file path."""
     fits_path = library_path.with_stem(library_path.stem + "_fits")
-    fits_path = fits_path.with_suffix('.npz')
+    fits_path = fits_path.with_suffix(".npz")
     return fits_path
 
 
@@ -1252,19 +1297,21 @@ def log_mem_usage(log):
 
     try:
         import resource
+
         # results.ru_maxrss is KB on Linux, B on macos
         mem_max = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         # macos systems
-        if sys.platform.lower().startswith('darwin'):
-            mem_max = (mem_max / 1024 ** 3)
+        if sys.platform.lower().startswith("darwin"):
+            mem_max = mem_max / 1024**3
         # linux systems
         else:
-            mem_max = (mem_max / 1024 ** 2)
+            mem_max = mem_max / 1024**2
     except Exception:
         mem_max = np.nan
 
     try:
         import psutil
+
         process = psutil.Process(os.getpid())
         mem_rss = process.memory_info().rss / 1024**3
         mem_vms = process.memory_info().vms / 1024**3
@@ -1278,5 +1325,3 @@ def log_mem_usage(log):
         log.info(msg)
 
     return
-
-
