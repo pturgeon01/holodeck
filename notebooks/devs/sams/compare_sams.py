@@ -713,7 +713,7 @@ def create_sams(nreals=5, nloud=5, fpath=_PATH_DATA, suite_type='grid', hard_typ
         for i in range(len(varied_values[varName])):
             print(f'Creating test SAM for {suite_type=}, {varName=}, var_value={varied_values[varName][i]}.')
             s = Test_SAM(hard_type=hard_type, model_type=suite_type, nreals=nreals, nloud=nloud, gpf_flag=gpfflag, 
-                         nuin_default=_nuin_default, dadt_default=_dadt_default, 
+                         tout_default=_tout_default, nuin_default=_nuin_default, dadt_default=_dadt_default, 
                          alph_default=_alph_default, r9_default=_r9_default,
                          var_value=varied_values[varName][i], hard_t=tau)
 
