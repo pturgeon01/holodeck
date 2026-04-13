@@ -110,25 +110,32 @@ class Test_SAM:
         else:
             print(f"{self.PARS['hard_dadt_rchar']=}, {self.PARS['hard_r_gw_crit_9']=}, "
                   f"{self.PARS['hard_alpha_gw_crit']=}, {self.PARS['hard_nu_inner']=}, {self.PARS['hard_inner_time']=}") 
-            self.hard = holo.hardening.FixedOuterTime_InnerPL_SAM(self.sam, 
-                                                                  inner_model_type = self.PARS['hard_inner_model_type'],
-                                                                  outer_time = self.PARS['hard_outer_time']*GYR, 
-                                                                  rchar = self.PARS['hard_rchar']*PC,
-                                                                  nu_inner = self.PARS['hard_nu_inner'],
-                                                                  gw_crit_units= self.PARS['hard_gw_crit_units'],
-                                                                  r_gw_crit_9 = self.PARS['hard_r_gw_crit_9'],
-                                                                  alpha_gw_crit = self.PARS['hard_alpha_gw_crit'],
-                                                                  dadt_rchar = self.PARS['hard_dadt_rchar'],
-                                                                  inner_time = self.PARS['hard_inner_time']
-                                                                 )
-               
+            if HardModelParamsAllowed(self, self.PARS):
+                self.hard = holo.hardening.FixedOuterTime_InnerPL_SAM(self.sam, 
+                                                                      inner_model_type = self.PARS['hard_inner_model_type'],
+                                                                      outer_time = self.PARS['hard_outer_time']*GYR, 
+                                                                      rchar = self.PARS['hard_rchar']*PC,
+                                                                      nu_inner = self.PARS['hard_nu_inner'],
+                                                                      gw_crit_units= self.PARS['hard_gw_crit_units'],
+                                                                      r_gw_crit_9 = self.PARS['hard_r_gw_crit_9'],
+                                                                      alpha_gw_crit = self.PARS['hard_alpha_gw_crit'],
+                                                                      dadt_rchar = self.PARS['hard_dadt_rchar'],
+                                                                      inner_time = self.PARS['hard_inner_time']
+                                                                     )
+            else:
+                print("    ...skipping hardening and gwb for SAM with invalid hardening model:")
+                print(f"alpha=")
+                self.gwb_sam = None
+                self.hard = None
         ### ***NOTE*** gwb() allows for including pars of loud sources (unlike gwb_new()):
-        print("    ...creating gwb for SAM")
-        self.gwb_sam = self.sam.gwb(self.PARS['freqs_edges'], self.hard,
-                                    realize=self.PARS['NREALS'], 
-                                    loudest=self.PARS['NLOUD'], params=True)  
-
-
+        if self.hard is not None:
+            print("    ...creating gwb for SAM")
+            self.gwb_sam = self.sam.gwb(self.PARS['freqs_edges'], self.hard,
+                                        realize=self.PARS['NREALS'], 
+                                        loudest=self.PARS['NLOUD'], params=True)  
+        else:
+            print("    ...skipping gwb for SAM with invalid hardening model")
+            self.gwb_sam = None
             
     def set_sam_params_manual(self, tau=None, var_value=None, tout_default=None,
                               dadt_default=None, nuin_default=None, 
@@ -527,7 +534,6 @@ def create_sams(nreals=5, nloud=5, fpath=_PATH_DATA, suite_type='grid', hard_typ
                                      hard_t=t, hard_ai=ai, hard_rc=rc, 
                                      hard_nin=nin, hard_nout=nout,
                                      gsmf_flag = gsmf, gpf_flag=gpfflag)
-
                         all_sams = all_sams + [s]
                             
         if pickle_sams and pickle_name is None:
