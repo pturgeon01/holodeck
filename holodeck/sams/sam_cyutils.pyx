@@ -530,7 +530,9 @@ def dynamic_binary_number_at_fobs(fobs_orb, sam, hard, cosmo):
     shape = sam.shape + (fobs_orb.size,)
     cdef np.ndarray[np.double_t, ndim=4] diff_num = np.zeros(shape)
     cdef np.ndarray[np.double_t, ndim=4] redz_final = -1.0 * np.ones(shape)
-    cdef int hard_gwcrit_units_rg
+    cdef int hard_gwcrit_units_rg = 1
+    cdef double nu_inner = NAN
+    cdef double dadt_rchar = NAN
 
     sam._log.info("checking class type of `hard`...")
                   
@@ -563,6 +565,14 @@ def dynamic_binary_number_at_fobs(fobs_orb, sam, hard, cosmo):
             sam._log.info("`gmt_time` not calculated in SAM.  Setting to zeros.")
             gmt_time = np.zeros(sam.shape)
 
+        # params not used in all models are initialized to NAN
+        if hard._inner_model_type == 0:
+            nu_inner = hard._nu_inner
+        elif hard._inner_model_type == 1:
+            dadt_rchar = hard._dadt_rchar
+        else:
+            raise NotImplementedError()
+            
         if hard._gw_crit_units == 'rg':
             hard_gwcrit_units_rg = 1
         else:
@@ -570,7 +580,7 @@ def dynamic_binary_number_at_fobs(fobs_orb, sam, hard, cosmo):
             
         _dynamic_binary_number_at_fobs_innerpwl(
             fobs_orb, hard._num_steps, hard._outer_time, 
-            hard._inner_model_type, hard._dadt_rchar, hard._rchar, hard._nu_inner,  
+            hard._inner_model_type, dadt_rchar, hard._rchar, nu_inner,  
             hard._r_gw_crit_9, hard_gwcrit_units_rg, hard._alpha_gw_crit,
             nden, sam.mtot, sam.mrat, sam.redz, gmt_time,
             cosmo._grid_z, cosmo._grid_dcom, cosmo._grid_age,
