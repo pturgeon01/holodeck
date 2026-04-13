@@ -1479,7 +1479,8 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
     """
 
     CONSISTENT = True
-    ENFORCE_SPEED_LIMIT = True
+    #ENFORCE_SPEED_LIMIT = True
+    ENFORCE_SPEED_LIMIT = False
 
     def __init__(self, sam, num_steps=300, outer_time=1.0*GYR, rchar=100.0*PC, 
                  nu_inner=-1.0, dadt_rchar=None, inner_time=None,
@@ -1607,6 +1608,7 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
         #    raise ValueError("all elements of rmax must be > rgw_crit.")     
 
         if self.ENFORCE_SPEED_LIMIT:
+            log.warning(f'Enforcing speed limit: dadt_max <= {_DADT_SPEED_LIMIT/SPLC}c.')
             # (M,) start at rchar, end at the ISCO
             rmin = utils.rad_isco(sam.mtot)
             # Choose steps for each binary, log-spaced between rmin and rmax
@@ -1693,9 +1695,9 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
 
             m9 = _mtot / (1.0e9*MSOL)
             if self._gw_crit_units == 'rg':
-                r9 = self._r_gw_crit_9 * utils.gravitational_radius(1.0e9*MSOL) # convert to pc
+                r9 = self._r_gw_crit_9 * utils.gravitational_radius(1.0e9*MSOL) # convert to cm
             else:
-                r9 = self._r_gw_crit_9 * PC # convert to pc
+                r9 = self._r_gw_crit_9 * PC # convert to cm
                 
             rgw_crit = r9 * m9**(self._alpha_gw_crit+1)
             #print(f"{rgw_crit.shape=} {rgw_crit.min()=} {rgw_crit.max()=} pc")
@@ -1722,28 +1724,38 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
 
             m9 = _mtot / (1.0e9*MSOL)
             if self._gw_crit_units == 'rg':
-                r9 = self._r_gw_crit_9 * utils.gravitational_radius(1.0e9*MSOL) # convert to pc
+                r9 = self._r_gw_crit_9 * utils.gravitational_radius(1.0e9*MSOL) # convert to cm
             else:
-                r9 = self._r_gw_crit_9 * PC # convert to pc
+                r9 = self._r_gw_crit_9 * PC # convert to cm
                 
             rgw_crit = r9 * m9**(self._alpha_gw_crit+1)
-            print(f"{rgw_crit.shape=} {rgw_crit.min()=} {rgw_crit.max()=} pc")
+            print(f"{rgw_crit.shape=} {rgw_crit.min()/PC=} {rgw_crit.max()/PC=} pc")
+            print(f"{self._rchar/PC=}")
 
             dadt_gw_crit = utils.gw_hardening_rate_dadt(m1, m2, rgw_crit)
-            #print(f"{dadt_gw_crit.shape=}")
-
+            dadt_gw_rchar = utils.gw_hardening_rate_dadt(m1, m2, self._rchar)
+            dadt_phenom_rchar = self._dadt_rchar - dadt_gw_rchar
+            print(f"{dadt_phenom_rchar.shape=}")
+                
+            print(f"{dadt_gw_crit.min()=} {dadt_gw_crit.max()=} {dadt_gw_rchar.min()=} {dadt_gw_rchar.max()=} "
+                  f"{dadt_phenom_rchar.min()=} {dadt_phenom_rchar.max()=}")
             # "inner" PL and hardening rate
             eta_norm = _mrat / np.square(1 + _mrat) * 4
             print(f"{eta_norm.min()=}, {eta_norm.max()=}")
-            nu_inner = 1 - ( np.log(-dadt_gw_crit) - np.log(-self._dadt_rchar*eta_norm) ) / ( np.log(rgw_crit) - np.log(self._rchar) )
+            print("dadt_gw_crit ratio: ", dadt_gw_crit[0,0,0,0]/dadt_gw_crit[0,-1,0,0], dadt_gw_crit[-1,0,0,0]/dadt_gw_crit[-1,-1,0,0])
+            
+            nu_inner = 1 - ( np.log(-dadt_gw_crit) - np.log(-dadt_phenom_rchar*eta_norm) ) / ( np.log(rgw_crit) - np.log(self._rchar) )
+            ##nu_inner = 1 - ( np.log(-dadt_gw_crit) - np.log(-self._dadt_rchar*eta_norm) ) / ( np.log(rgw_crit) - np.log(self._rchar) )
             dadt_vals = dadt_gw_crit * ( _sepa / rgw_crit ) ** (1.0-nu_inner)
+            print(f"{np.abs(dadt_vals.min())=}, {np.abs(dadt_vals.max())=}")
+            print(f"{np.abs(nu_inner.min())=}, {np.abs(nu_inner.max())=}")
 
             if np.any((rgw_crit>self._rchar)):
-                log.warning(f"found rchar < rgw_crit! ({rgw_crit.max()=:.6g}, {self._rchar=:.6g}."
-                            f" setting PL dadt=0 for these instances.")
-                #raise ValueError(f"all elements of rchar must be > rgw_crit. ({rgw_crit.max()=}, {self._rchar=}")
-                dadt_vals[rgw_crit>self._rchar] = 0.0                
-        
+                raise ValueError(f"all elements of rchar must be > rgw_crit. ({rgw_crit.max()=}, {self._rchar=}")
+                
+            if np.any((self._rchar <= _sepa[:,:,:,-1])):
+                raise ValueError(f"found rchar < rmin!: {self._rchar/PC=}, {_sepa[:,:,:,-1].max()/PC=}")
+                
         elif self._inner_model_type == 2:
             # set inner hardening using dadt_rchar and nu_inner (lowest priority for testing)
             raise NotImplementedError()
@@ -1754,9 +1766,10 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
             
         else:
             raise ValueError(f"{self._inner_model_type=} not defined. valid values are 0-3.")
-
         
         dadt_vals += dadt_gw
+        
+
         
         #print(f"{dadt_vals.shape=} {_sepa.shape=}")
         inner_time = -utils.trapz_loglog(-1.0 / dadt_vals, _sepa, axis=-1, cumsum=True)
