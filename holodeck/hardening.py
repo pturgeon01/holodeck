@@ -1475,17 +1475,16 @@ class Fixed_Time_2PL_SAM(_Hardening):
 
 # ====    New hardening implementation    ====
 class FixedOuterTime_InnerPL_SAM(_Hardening):
-    """Binary evolution for a fixed lifetime at large separations and single PL hardening at small separations.
-    """
+    """Binary evolution for a fixed lifetime at large separations and single PL hardening at small separations."""
 
     CONSISTENT = True
     #ENFORCE_SPEED_LIMIT = True
-    ENFORCE_SPEED_LIMIT = False
-
+    #ENFORCE_PHYSICAL_PARAMS = True
+    
     def __init__(self, sam, num_steps=300, outer_time=1.0*GYR, rchar=100.0*PC, 
                  nu_inner=-1.0, dadt_rchar=None, inner_time=None,
                  gw_crit_units='rg', r_gw_crit_9=1e3, alpha_gw_crit=0.5, 
-                 inner_model_type=0):
+                 inner_model_type=0, enforce_speed_limit=False, enforce_physical_params=False):
         """Initialize a `FixedOuterTime_InnerPL_SAM` instance using a provided `Semi_Analytic_Model` instance.
 
         Parameters
@@ -1506,6 +1505,16 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
         import holodeck.sams  # noqa
         import holodeck.sams.sam_cyutils  # noqa
 
+        if enforce_physical_params and not enforce_speed_limit:
+            err = f"enforce_physical_params requires enforce_speed_limit=True"
+            log.error(err)
+            raise ValueError(err)
+        if enforce_physical_params and inner_model_type !=1:
+            if self._inner_model_type != 1:
+                err = f"enforce_physical_params defined only for inner_model_type=1"
+                log.error(err)
+                raise NotImplementedError(err)
+        
         assert np.ndim(outer_time) == 0
         if rchar is None or np.ndim(rchar) != 0:
             raise ValueError(f"Keyword `rchar` cannot be None & must have ndim=0.")
@@ -1517,7 +1526,7 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
             assert np.ndim(alpha_gw_crit) == 0 and alpha_gw_crit is not None
             assert gw_crit_units in ('pc','rg')
             if dadt_rchar is not None or inner_time is not None:
-                log.warning(f"For {inner_model_type=}, setting these to None: {dadt_rchar=}, {inner_time=}.")
+                log.warning(f"For {inner_model_type=}, setting to None: {dadt_rchar=}, {inner_time=}.")
                 dadt_rchar = None
                 inner_time = None
             #assert (nu_inner is not None and r_gw_crit_9 is not None and alpha_gw_crit is not None
@@ -1529,7 +1538,7 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
             assert np.ndim(alpha_gw_crit) == 0 and alpha_gw_crit is not None
             assert gw_crit_units in ('pc','rg')
             if nu_inner is not None or inner_time is not None:
-                log.warning(f"For {inner_model_type=}, setting these to None: {nu_inner=}, {inner_time=}.")
+                log.warning(f"For {inner_model_type=}, setting to None: {nu_inner=}, {inner_time=}.")
                 nu_inner = None
                 inner_time = None
             #assert (dadt_rchar is not None and r_gw_crit_9 is not None and alpha_gw_crit is not None
@@ -1541,7 +1550,7 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
             assert np.ndim(nu_inner) == 0 and nu_inner is not None
             assert np.ndim(dadt_rchar) == 0 and dadt_rchar is not None
             if r_gw_crit_9 is not None or alpha_gw_crit is not None or inner_time is not None:
-                msg = f"For {inner_model_type=}, setting these to None: {r_gw_crit_9=}, {alpha_gw_crit=}, {inner_time=}."
+                msg = f"For {inner_model_type=}, setting to None: {r_gw_crit_9=}, {alpha_gw_crit=}, {inner_time=}."
                 log.warning(msg)
                 r_gw_crit_9 = None
                 alpha_gw_crit = None
@@ -1555,7 +1564,7 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
             assert np.ndim(nu_inner) == 0 and nu_inner is not None
             assert np.ndim(inner_time) == 0 and inner_time is not None
             if r_gw_crit_9 is not None or alpha_gw_crit is not None or dadt_rchar is not None:
-                msg = f"For {inner_model_type=}, setting these to None: {r_gw_crit_9=}, {alpha_gw_crit=}, {dadt_rchar=}."
+                msg = f"For {inner_model_type=}, setting to None: {r_gw_crit_9=}, {alpha_gw_crit=}, {dadt_rchar=}."
                 log.warning(msg)
                 r_gw_crit_9 = None
                 alpha_gw_crit = None
@@ -1565,7 +1574,9 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
         else:
             raise ValueError(f"Invalid {inner_model_type=}. Valid model flags are 0 - 3.")
         
-        self._inner_model_type = inner_model_type    
+        self._inner_model_type = inner_model_type  
+        self._enforce_physical_params = enforce_physical_params # throw error if not physical
+        self._enforce_speed_limit = enforce_speed_limit # throw error if exceeds speed limit
         self._outer_time = outer_time        # [s]
         self._num_steps = num_steps
         self._rchar = rchar                  # [cm]
@@ -1607,30 +1618,43 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
         #if np.any((self._rgw_crit>self._rchar)):
         #    raise ValueError("all elements of rmax must be > rgw_crit.")     
 
-        if self.ENFORCE_SPEED_LIMIT:
-            log.warning(f'Enforcing speed limit: dadt_max <= {_DADT_SPEED_LIMIT/SPLC}c.')
-            # (M,) start at rchar, end at the ISCO
-            rmin = utils.rad_isco(sam.mtot)
-            # Choose steps for each binary, log-spaced between rmin and rmax
-            extr = np.log10([self._rchar * np.ones_like(rmin), rmin])
-            radii = np.linspace(0.0, 1.0, num_steps)[np.newaxis, :]
-            # (M, X)
-            radii = extr[0][:, np.newaxis] + (extr[1] - extr[0])[:, np.newaxis] * radii
-            radii = 10.0 ** radii
-            # (M, Q, Z, X)
-            mt, mr, rz, rads = np.broadcast_arrays(
-                sam.mtot[:, np.newaxis, np.newaxis, np.newaxis],
-                sam.mrat[np.newaxis, :, np.newaxis, np.newaxis],
-                sam.redz[np.newaxis, np.newaxis, :, np.newaxis],
-                radii[:, np.newaxis, np.newaxis, :]
-            )
-            # TO DO: might need to cythonize for performance
-            dadt_vals,rgwc,rzc,rzf = self.dadt(mt, mr, rz, rads)
-            dadt_max = np.abs(dadt_vals).max()
-            if dadt_max > _DADT_SPEED_LIMIT:
-                err = f"Invalid hardening model! {dadt_max=:.6g} (>{_DADT_SPEED_LIMIT/SPLC}c)."
-                log.error(err)
-                raise ValueError(err)
+        if self._inner_model_type == 1:
+            self._params_allowed = self.check_params_allowed(sam.mtot, sam.mrat)
+            if np.any(self._params_allowed==False):
+                log.warning(f"Found invalid hardening model params!")
+            print(f"{self._params_allowed=}")
+
+        if self._enforce_speed_limit:
+            if self._enforce_physical_params:
+                if np.any(self._params_allowed==False):
+                    err = f"Invalid hardening model!"
+                    log.error(err)
+                    raise ValueError(err)
+            else:
+                log.warning(f'Enforcing speed limit: dadt_max <= {_DADT_SPEED_LIMIT/SPLC}c.')
+                log.warning(f'Checking all dadt values b/c NOT enforcing other physical params (this is slow!)')
+                # (M,) start at rchar, end at the ISCO
+                rmin = utils.rad_isco(sam.mtot)
+                # Choose steps for each binary, log-spaced between rmin and rmax
+                extr = np.log10([self._rchar * np.ones_like(rmin), rmin])
+                radii = np.linspace(0.0, 1.0, num_steps)[np.newaxis, :]
+                # (M, X)
+                radii = extr[0][:, np.newaxis] + (extr[1] - extr[0])[:, np.newaxis] * radii
+                radii = 10.0 ** radii
+                # (M, Q, Z, X)
+                mt, mr, rz, rads = np.broadcast_arrays(
+                    sam.mtot[:, np.newaxis, np.newaxis, np.newaxis],
+                    sam.mrat[np.newaxis, :, np.newaxis, np.newaxis],
+                    sam.redz[np.newaxis, np.newaxis, :, np.newaxis],
+                    radii[:, np.newaxis, np.newaxis, :]
+                )
+                # TO DO: might need to cythonize for performance
+                dadt_vals,rgwc,rzc,rzf = self.dadt(mt, mr, rz, rads)
+                dadt_max = np.abs(dadt_vals).max()
+                if dadt_max > _DADT_SPEED_LIMIT:
+                    err = f"Invalid hardening model! {dadt_max=:.6g} (>{_DADT_SPEED_LIMIT/SPLC}c)."
+                    log.error(err)
+                    raise ValueError(err)
         
         return
 
@@ -1733,18 +1757,19 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
             print(f"{self._rchar/PC=}")
 
             dadt_gw_crit = utils.gw_hardening_rate_dadt(m1, m2, rgw_crit)
-            dadt_gw_rchar = utils.gw_hardening_rate_dadt(m1, m2, self._rchar)
-            dadt_phenom_rchar = self._dadt_rchar - dadt_gw_rchar
-            print(f"{dadt_phenom_rchar.shape=}")
-                
-            print(f"{dadt_gw_crit.min()=} {dadt_gw_crit.max()=} {dadt_gw_rchar.min()=} {dadt_gw_rchar.max()=} "
-                  f"{dadt_phenom_rchar.min()=} {dadt_phenom_rchar.max()=}")
+
             # "inner" PL and hardening rate
             eta_norm = _mrat / np.square(1 + _mrat) * 4
             print(f"{eta_norm.min()=}, {eta_norm.max()=}")
             print("dadt_gw_crit ratio: ", dadt_gw_crit[0,0,0,0]/dadt_gw_crit[0,-1,0,0], dadt_gw_crit[-1,0,0,0]/dadt_gw_crit[-1,-1,0,0])
+            dadt_gw_rchar = utils.gw_hardening_rate_dadt(m1, m2, self._rchar)
+            dadt_phenom_rchar = (self._dadt_rchar - dadt_gw_rchar) * eta_norm
+            print(f"{dadt_phenom_rchar.shape=}")
+                
+            print(f"{dadt_gw_crit.min()=} {dadt_gw_crit.max()=} {dadt_gw_rchar.min()=} {dadt_gw_rchar.max()=} "
+                  f"{dadt_phenom_rchar.min()=} {dadt_phenom_rchar.max()=}")
             
-            nu_inner = 1 - ( np.log(-dadt_gw_crit) - np.log(-dadt_phenom_rchar*eta_norm) ) / ( np.log(rgw_crit) - np.log(self._rchar) )
+            nu_inner = 1 + ( np.log(-dadt_gw_crit) - np.log(-dadt_phenom_rchar) ) / ( np.log(self._rchar) - np.log(rgw_crit) )
             ##nu_inner = 1 - ( np.log(-dadt_gw_crit) - np.log(-self._dadt_rchar*eta_norm) ) / ( np.log(rgw_crit) - np.log(self._rchar) )
             dadt_vals = dadt_gw_crit * ( _sepa / rgw_crit ) ** (1.0-nu_inner)
             print(f"{np.abs(dadt_vals.min())=}, {np.abs(dadt_vals.max())=}")
@@ -1769,8 +1794,6 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
         
         dadt_vals += dadt_gw
         
-
-        
         #print(f"{dadt_vals.shape=} {_sepa.shape=}")
         inner_time = -utils.trapz_loglog(-1.0 / dadt_vals, _sepa, axis=-1, cumsum=True)
         #print(f"{inner_time.shape=}")
@@ -1784,7 +1807,74 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
         
         return dadt_vals, rgw_crit, redz_char, redz_final
 
+    def check_params_allowed(self, _mtot, _mrat, nu_inner_max=10.0):
 
+        mt, mr, = np.broadcast_arrays(
+            _mtot[:, np.newaxis],
+            _mrat[np.newaxis, :]
+        )
+        
+        #print(f"{_mtot.shape=} {_mrat.shape=}")
+        #print(modelAllowed)
+        # TO DO: make the eta_norm factor consistent throughout
+        
+        if self._dadt_rchar >= _DADT_SPEED_LIMIT:
+            log.warning("In check_params_allowed(): self.dadt_rchar >= _DADT_SPEED_LIMIT")
+            modelAllowed = np.zeros_like(mt).astype('bool')
+            return modelAllowed
+        else:
+            modelAllowed = np.ones_like(mt).astype('bool')
+
+        #m9 = _mtot / (1.0e9*MSOL)
+        m9 = mt / (1.0e9*MSOL)
+        if self._gw_crit_units == 'rg':
+            r9 = self._r_gw_crit_9 * utils.gravitational_radius(1.0e9*MSOL) # convert to cm
+        else:
+            r9 = self._r_gw_crit_9 * PC # convert to cm
+                
+        rgw_crit = r9 * m9**(self._alpha_gw_crit+1)
+        risco = utils.rad_isco(mt)
+
+        # rcritGW > rISCO criterion    
+        #if np.any(rgw_crit <= risco):
+        #    log.warning("In check_params_allowed(): rgw_crit <= risco") 
+        #    return False
+        modelAllowed[(rgw_crit <= risco)|(rgw_crit >= self._rchar)] = False
+        if np.any(modelAllowed == False):
+            log.warning("In check_params_allowed(): found rgw_crit <= risco or >= rchar") 
+        
+        # rcritGW < rchar criterion
+        #elif np.any(rgw_crit >= self._rchar):
+        #    log.warning("In check_params_allowed(): rgw_crit >= self._rchar") 
+        #    return False
+        
+        #(1-vmax)*lgrdiff + lgadotgw is a min or max depending if adotrch > or < dadt_gw_crit
+        m1, m2 = utils.m1m2_from_mtmr(mt, mr)
+        dadt_gw_crit = utils.gw_hardening_rate_dadt(m1, m2, rgw_crit)
+        lgrdiff = np.log10(self._rchar)-np.log10(rgw_crit)
+        min_lgdadtrchar_nuinmax = (1-nu_inner_max)*lgrdiff + np.log10(-dadt_gw_crit)
+        max_lgdadtrchar_nuinmax = (1+nu_inner_max)*lgrdiff + np.log10(-dadt_gw_crit)
+        eta_norm = mr / np.square(1 + mr) * 4
+        dadt_gw_rchar = utils.gw_hardening_rate_dadt(m1, m2, self._rchar)
+        dadt_phenom_rchar = (self._dadt_rchar - dadt_gw_rchar) * eta_norm
+
+        # |nu_inner| < nu_inner,max criteria
+        modelAllowed[min_lgdadtrchar_nuinmax>max_lgdadtrchar_nuinmax] = False
+        modelAllowed[np.log10(-dadt_phenom_rchar) < min_lgdadtrchar_nuinmax] = False
+        modelAllowed[np.log10(-dadt_phenom_rchar) > max_lgdadtrchar_nuinmax] = False
+        #if np.any(min_lgdadtrchar_nuinmax>max_lgdadtrchar_nuinmax): 
+        #    log.warning("In check_params_allowed(): no valid dadt_rchar values for this model.")         
+        #    return False
+        #elif (np.any(np.log10(-dadt_phenom_rchar) < min_lgdadtrchar_nuinmax) or 
+        #      np.any(np.log10(-dadt_phenom_rchar) > max_lgdadtrchar_nuinmax)):
+        #    warn = (f"In check_params_allowed(): log(-dadt_rchar)={(np.log10(-dadt_phenom_rchar))} "
+        #            f"outside valid range ({min_lgdadtrchar_nuinmax}-{max_lgdadtrchar_nuinmax})for this model.")
+        #    log.warning(warn)         
+        #    return False
+        #else:
+        #    return True
+
+        return modelAllowed
 
 # =================================================================================================
 # ====    Utility Classes and Functions    ====
@@ -2137,3 +2227,44 @@ def _radius_loss_cone_BBR1980_dehnen(mbh, mstar, gamma=1.0):
     rstar = _radius_stellar_characteristic_dabringhausen_2008(mstar, gamma)
     rlc = np.power(mass_of_a_star / mbh, 0.25) * np.power(rbnd/rstar, 2.25) * rstar
     return rlc
+
+def allowed_param_range(mtot, mrat, alpha, rchar, risco_in_rg=6.0, nu_inner_max=10.0):
+
+    raise NotImplementedError()
+    
+    # allowed hardening param criteria for FixedOuterTime_InnerPL_SAM hardening 
+    # with inner_model_type=1
+    # TO DO: make the eta_norm factor consistent throughout
+
+    m9 = mtot / (1.0e9*MSOL)    
+    lg_risco_in_rg = np.log10(risco_in_rg)
+    min_lgr9rg = lg_risco_in_rg - alpha * np.log10(m9)
+    max_lgr9rg = np.log10(rchar/utils.gravitational_radius(1.0e9*MSOL)) - (alpha+1) * np.log10(m9)
+
+    #(1-vmax)*lgrdiff + lgadotgw is a min or max depending if adotrch > or < dadt_gw_crit
+    #         rgw_crit = r9 * m9**(self._alpha_gw_crit+1)
+    fac = utils.gravitational_radius(1.0e9*MSOL) * m9**(alpha+1)
+    min_rgw_crit = 10.0**min_lgr9rg * fac
+    max_rgw_crit = 10.0**max_lgr9rg * fac
+    m1, m2 = utils.m1m2_from_mtmr(mtot, mrat)
+    min_lgdadtgwcrit = np.log10(-utils.gw_hardening_rate_dadt(m1, m2, min_rgw_crit))
+    max_lgdadtgwcrit = np.log10(-utils.gw_hardening_rate_dadt(m1, m2, max_rgw_crit))
+    if min_lgdadtgwcrit >= max_lgdadtgwcrit:
+        print('something is wrong. min >= max in allowed_param_range().')
+        raise ValueError()
+        
+    min_lgdadtrchar = (1-nu_inner_max)*(np.log10(rchar)-np.log10(min_rgw_crit)) + min_lgdadtgwcrit
+    max_lgdadtrchar_nuinmax = (1+nu_inner_max)*(np.log10(rchar)-np.log10(min_rgw_crit)) + max_lgdadtgwcrit
+    eta_norm = mrat / np.square(1 + mrat) * 4
+    dadt_gw_rchar = utils.gw_hardening_rate_dadt(m1, m2, rchar)
+    dadt_phenom_rchar = (self._dadt_rchar - dadt_gw_rchar) * eta_norm
+    
+    max_lgdadtrchar = np.maximum(max_lgdadtrchar_nuinmax, np.log10(_DADT_SPEED_LIMIT))
+
+    if min_lgr9rg > max_lgr9rg:
+        log.warning(f"{min_lgr9rg=} > {max_lgr9rg=}")
+    if min_lgdadtrchar > max_lgdadtrchar:
+        log.warning(f"{min_lgdadtrchar=} > {max_lgdadtrchar=}")
+    
+    return min_lgr9rg, max_lgr9rg, min_lgdadtrchar, max_lgdadtrchar
+
