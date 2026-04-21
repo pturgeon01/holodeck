@@ -1758,11 +1758,11 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
         where r9 is specified in either gravitational radii or parsecs.
         Assumes dadt < 0 everywhere; positive values will lead to invalid logs.
 
-    """        
-        print(f"in dadt class: {self._dadt_rchar=}, {self._rchar=}, {self._r_gw_crit_9=}, "
-              f"{self._alpha_gw_crit=}, {self._nu_inner=}, {self._inner_time=}") 
+        """        
+        #print(f"in dadt class: {self._dadt_rchar=}, {self._rchar=}, {self._r_gw_crit_9=}, "
+        #      f"{self._alpha_gw_crit=}, {self._nu_inner=}, {self._inner_time=}") 
 
-        print(f"*** {_sepa.max()=}  {_sepa.min()=} ***")
+        #print(f"*** {_sepa.max()=}  {_sepa.min()=} ***")
         m1, m2 = utils.m1m2_from_mtmr(_mtot, _mrat)
 
         redz_char = utils.redz_after(self._outer_time, redz=_redz, age=None)   # redshift at end of 'outer' phase 
@@ -1804,7 +1804,7 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
                 r9 = self._r_gw_crit_9 * PC # convert to cm
             
             rgw_crit = r9 * m9**(self._alpha_gw_crit+1)
-            print(f"{self._rchar/PC=}")
+            #print(f"{self._rchar/PC=}")
             
             dadt_gw_crit = utils.gw_hardening_rate_dadt(m1, m2, rgw_crit)
 
@@ -1819,7 +1819,7 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
             dadt_vals = dadt_gw_crit * ( _sepa / rgw_crit ) ** (1.0-nu_inner)
 
             if np.any((rgw_crit>self._rchar)):
-                raise ValueError(f"all elements of rchar must be > rgw_crit. ({rgw_crit.max()=}, {self._rchar=}")
+                log.warning(f"found rchar < rgw_crit! ({rgw_crit.max()=}, {self._rchar=}")
                 
             if np.any((self._rchar <= _sepa[:,:,:,-1])):
                 raise ValueError(f"found rchar < rmin!: {self._rchar/PC=}, {_sepa[:,:,:,-1].max()/PC=}")
@@ -1841,9 +1841,6 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
         inner_time = inner_time[:,:,:,-1]
         redz_final = utils.redz_after(inner_time, redz=redz_char[:,:,:,-1], age=None) # merger redshift 
 
-        ####    double check: need to add some reshaping stuff like in Fixed_Time_2PL_SAM()?
-        print(f"before return: {dadt_vals.shape=}")
-        
         return dadt_vals, rgw_crit, redz_char, redz_final
 
     def check_params_allowed(self, _mtot, _mrat, nu_inner_max=10.0):
