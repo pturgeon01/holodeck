@@ -51,7 +51,7 @@ class Test_SAM:
                  hard_nin=None, hard_nout=None, gsmf_flag = None,
                  mmbulge=None, var_value=None, tout_default=None,
                  nuin_default=None, dadt_default=None, 
-                 alph_default=None,r9_default=None):
+                 alph_default=None,r9_default=None,rch_default=None):
 
         if hard_type not in ('fixed2PL','fixedOuter'):
             raise ValueError(f"{hard_type=} note defined, must be 'fixed2PL' or 'fixedOuter'.")
@@ -73,9 +73,12 @@ class Test_SAM:
             self.set_sam_params_grid(tau=hard_t, ai=hard_ai, rc=hard_rc, 
                                      nin=hard_nin, nout=hard_nout, mf = gsmf_flag)
         else:
+            print(f'in TestSAM, defaults: {tout_default=} {nuin_default=} {dadt_default=} {alph_default=} {r9_default=} {rch_default=}')
             self.set_sam_params_manual(tau=hard_t, var_value=var_value, tout_default=tout_default,
                                        nuin_default=nuin_default, dadt_default=dadt_default,
-                                       alph_default=alph_default, r9_default=r9_default)
+                                       alph_default=alph_default, r9_default=r9_default,rch_default=rch_default)
+            print(f"pars: {self.PARS['hard_outer_time']=} {self.PARS['hard_rchar']=} {self.PARS['hard_dadt_rchar']=} "
+                  f"{self.PARS['hard_r_gw_crit_9']=} {self.PARS['hard_alpha_gw_crit']=}")
 
         self.nfreqs = self.PARS['freqs'].size
         print(f"{self.nfreqs=}")
@@ -108,38 +111,43 @@ class Test_SAM:
                                                           gamma_outer = self.PARS['hard_gamma_outer'],
                                                          )
         else:
-            print(f"{self.PARS['hard_dadt_rchar']=}, {self.PARS['hard_r_gw_crit_9']=}, "
+            print(f"{self.PARS['hard_dadt_rchar']=}, {self.PARS['hard_rchar']=}, {self.PARS['hard_r_gw_crit_9']=}, "
                   f"{self.PARS['hard_alpha_gw_crit']=}, {self.PARS['hard_nu_inner']=}, {self.PARS['hard_inner_time']=}") 
-            if HardModelParamsAllowed(self, self.PARS):
-                self.hard = holo.hardening.FixedOuterTime_InnerPL_SAM(self.sam, 
-                                                                      inner_model_type = self.PARS['hard_inner_model_type'],
-                                                                      outer_time = self.PARS['hard_outer_time']*GYR, 
-                                                                      rchar = self.PARS['hard_rchar']*PC,
-                                                                      nu_inner = self.PARS['hard_nu_inner'],
-                                                                      gw_crit_units= self.PARS['hard_gw_crit_units'],
-                                                                      r_gw_crit_9 = self.PARS['hard_r_gw_crit_9'],
-                                                                      alpha_gw_crit = self.PARS['hard_alpha_gw_crit'],
-                                                                      dadt_rchar = self.PARS['hard_dadt_rchar'],
-                                                                      inner_time = self.PARS['hard_inner_time']
-                                                                     )
-            else:
-                print("    ...skipping hardening and gwb for SAM with invalid hardening model:")
-                print(f"alpha=")
-                self.gwb_sam = None
-                self.hard = None
+            self.hard = holo.hardening.FixedOuterTime_InnerPL_SAM(self.sam, 
+                                                                  inner_model_type = self.PARS['hard_inner_model_type'],
+                                                                  outer_time = self.PARS['hard_outer_time']*GYR, 
+                                                                  rchar = self.PARS['hard_rchar']*PC,
+                                                                  nu_inner = self.PARS['hard_nu_inner'],
+                                                                  gw_crit_units= self.PARS['hard_gw_crit_units'],
+                                                                  r_gw_crit_9 = self.PARS['hard_r_gw_crit_9'],
+                                                                  alpha_gw_crit = self.PARS['hard_alpha_gw_crit'],
+                                                                  dadt_rchar = self.PARS['hard_dadt_rchar'],
+                                                                  inner_time = self.PARS['hard_inner_time']
+                                                                  )
+        
         ### ***NOTE*** gwb() allows for including pars of loud sources (unlike gwb_new()):
-        if self.hard is not None:
+        if np.any(self.hard._params_allowed==False):
+            print("    ...skipping gwb for SAM with invalid hardening model(s):")
+            print(f"alpha={self.PARS['hard_alpha_gw_crit']}, rchar={self.PARS['hard_rchar']}, "
+                  f"r9={self.PARS['hard_r_gw_crit_9']}, dadt(rchar)={self.PARS['hard_dadt_rchar']}")
+            mt, mr, = np.broadcast_arrays(
+                self.sam.mtot[:, np.newaxis],
+                self.sam.mrat[np.newaxis, :]
+            )
+            print(f"min/max bad mt={np.log10(mt[self.hard._params_allowed==False].min()/MSOL)}/"
+                  f"{np.log10(mt[self.hard._params_allowed==False].max()/MSOL)}")
+            print(f"min/max bad mr={mr[self.hard._params_allowed==False].min()}/"
+                  f"{mr[self.hard._params_allowed==False].max()}")
+            self.gwb_sam = None
+        else:
             print("    ...creating gwb for SAM")
             self.gwb_sam = self.sam.gwb(self.PARS['freqs_edges'], self.hard,
                                         realize=self.PARS['NREALS'], 
                                         loudest=self.PARS['NLOUD'], params=True)  
-        else:
-            print("    ...skipping gwb for SAM with invalid hardening model")
-            self.gwb_sam = None
             
     def set_sam_params_manual(self, tau=None, var_value=None, tout_default=None,
                               dadt_default=None, nuin_default=None, 
-                              alph_default=None, r9_default=None):
+                              alph_default=None, r9_default=None, rch_default=None):
 
         if tau is None and 'new_hardening' not in self.model_type:
             raise ValueError("must choose a numerical value of keyword tau (in Gyr)!")
@@ -338,7 +346,7 @@ class Test_SAM:
                 desc='set inner hardening using nu_inner, r_gw_crit_9, and alpha_gw_crit',
                 hard_inner_model_type=0,
                 hard_outer_time=var_value,     # [Gyr]
-                hard_rchar=100.0,        # [pc]
+                hard_rchar=rch_default,        # [pc]
                 #hard_nu_inner=-1.0,
                 hard_nu_inner=nuin_default,
                 hard_gw_crit_units='rg',
@@ -355,7 +363,7 @@ class Test_SAM:
                 desc='set inner hardening using nu_inner, r_gw_crit_9, and alpha_gw_crit',
                 hard_inner_model_type=0,
                 hard_outer_time=tout_default,     # [Gyr]
-                hard_rchar=100.0,        # [pc]
+                hard_rchar=rch_default,        # [pc]
                 hard_nu_inner=var_value,
                 hard_gw_crit_units='rg',
                 hard_r_gw_crit_9=r9_default, 
@@ -371,7 +379,7 @@ class Test_SAM:
                 desc='set inner hardening using nu_inner, r_gw_crit_9, and alpha_gw_crit',
                 hard_inner_model_type=0,
                 hard_outer_time=tout_default,     # [Gyr]
-                hard_rchar=100.0,        # [pc]
+                hard_rchar=rch_default,        # [pc]
                 hard_nu_inner=nuin_default,
                 hard_gw_crit_units='rg',
                 hard_r_gw_crit_9=var_value, 
@@ -386,7 +394,7 @@ class Test_SAM:
                 desc='set inner hardening using nu_inner, r_gw_crit_9, and alpha_gw_crit',
                 hard_inner_model_type=0,
                 hard_outer_time=tout_default,     # [Gyr]
-                hard_rchar=100.0,        # [pc]
+                hard_rchar=rch_default,        # [pc]
                 hard_nu_inner=nuin_default,
                 hard_gw_crit_units='rg',
                 hard_r_gw_crit_9=r9_default, 
@@ -401,7 +409,7 @@ class Test_SAM:
                 desc='set inner hardening using dadt_rchar, r_gw_crit_9, and alpha_gw_crit',
                 hard_inner_model_type=1,
                 hard_outer_time=var_value,     # [Gyr]
-                hard_rchar=1.0,        # [pc]
+                hard_rchar=rch_default,        # [pc]
                 hard_dadt_rchar=dadt_default,  # [cm/s]
                 hard_gw_crit_units='rg',
                 hard_r_gw_crit_9=r9_default, 
@@ -416,7 +424,7 @@ class Test_SAM:
                 desc='set inner hardening using dadt_rchar, r_gw_crit_9, and alpha_gw_crit',
                 hard_inner_model_type=1,
                 hard_outer_time=tout_default,     # [Gyr]
-                hard_rchar=1.0,        # [pc]
+                hard_rchar=rch_default,        # [pc]
                 hard_dadt_rchar=var_value,  # [cm/s]
                 hard_gw_crit_units='rg',
                 hard_r_gw_crit_9=r9_default, 
@@ -431,7 +439,7 @@ class Test_SAM:
                 desc='set inner hardening using dadt_rchar, r_gw_crit_9, and alpha_gw_crit',
                 hard_inner_model_type=1,
                 hard_outer_time=tout_default,     # [Gyr]
-                hard_rchar=1.0,        # [pc]
+                hard_rchar=rch_default,        # [pc]
                 hard_dadt_rchar=dadt_default,  # [cm/s]
                 hard_gw_crit_units='rg',
                 hard_r_gw_crit_9=var_value, 
@@ -446,11 +454,26 @@ class Test_SAM:
                 desc='set inner hardening using dadt_rchar, r_gw_crit_9, and alpha_gw_crit',
                 hard_inner_model_type=1,
                 hard_outer_time=tout_default,     # [Gyr]
-                hard_rchar=1.0,        # [pc]
+                hard_rchar=rch_default,        # [pc]
                 hard_dadt_rchar=dadt_default,  # [cm/s]
                 hard_gw_crit_units='rg',
                 hard_r_gw_crit_9=r9_default, 
                 hard_alpha_gw_crit=var_value, 
+                hard_nu_inner=None,
+                hard_inner_time=None,
+                gsmf = holo.sams.GSMF_Double_Schechter()                
+            )
+        elif self.model_type == 'new_hardening_type1_rchvar':
+            # set inner hardening using dadt_rchar, r_gw_crit_9, and alpha_gw_crit
+            self.PARS = dict(
+                desc='set inner hardening using dadt_rchar, r_gw_crit_9, and alpha_gw_crit',
+                hard_inner_model_type=1,
+                hard_outer_time=tout_default,     # [Gyr]
+                hard_rchar=var_value,        # [pc]
+                hard_dadt_rchar=dadt_default,  # [cm/s]
+                hard_gw_crit_units='rg',
+                hard_r_gw_crit_9=r9_default, 
+                hard_alpha_gw_crit=alph_default, 
                 hard_nu_inner=None,
                 hard_inner_time=None,
                 gsmf = holo.sams.GSMF_Double_Schechter()                
@@ -516,7 +539,7 @@ class Test_SAM:
 def create_sams(nreals=5, nloud=5, fpath=_PATH_DATA, suite_type='grid', hard_type='fixed2PL',
                 ai=None, tau=None, gsmf=None, gpfflag=None, _tout_default=None,
                 _nuin_default=None, _dadt_default=None, _alph_default=None, _r9_default=None, 
-                pickle_sams=True, pickle_name=None, pickle_name_extra=None):
+                _rch_default=None, pickle_sams=True, pickle_name=None, pickle_name_extra=None):
 
     all_sams = []
     
@@ -697,11 +720,12 @@ def create_sams(nreals=5, nloud=5, fpath=_PATH_DATA, suite_type='grid', hard_typ
 
         
         varied_values = dict(
-            tout=[0.1, 1.0, 10.0],
-            nui=[-1.5, -1.0, -0.5, 0.0],
-            dadt=[-10.0, -10.0**2.5, -1.0e4, -10.0**5.5, -1.0e7],
-            r9=[30, 100, 300, 1e3, 3e3],
-            alph=[-0.5, -1.0/3, -0.25, -0.1, 0.0]
+            tout=np.logspace(-1, 1, 5).tolist(),
+            nui=np.arange(-1, 2.5, 0.5).tolist(),
+            dadt=(-1.0*np.logspace(3, 9, 7)).tolist(),
+            r9=np.logspace(1.5, 3.5, 9).tolist(),
+            alph=np.linspace(-0.5, 0.0, 7).tolist(),
+            rch=np.logspace(1.0, 3.0, 9).tolist()
         )
         
         varName = [m for m in varied_values.keys() if m in suite_type]
@@ -712,15 +736,15 @@ def create_sams(nreals=5, nloud=5, fpath=_PATH_DATA, suite_type='grid', hard_typ
 
         # this is sloppy logic, FIX IT
         #if varName not in ('tout', 'nui', 'alph','r9') and None in (_tout_default,_nuin_default,_alph_default,_r9_default):
-        if varName not in ('tout','alph','r9') and None in (_tout_default,_alph_default,_r9_default):
-            raise ValueError(f"Must set default value of `tout`, `alph`, and `r9` when these parameters are not varied.")
-        
+        if varName not in ('tout','alph','r9','rch') and None in (_tout_default,_alph_default,_r9_default,_rch_default):
+            raise ValueError(f"Must set default value of `tout`, `alph`, `r9`, and `rch` when these parameters are not varied.")
         
         for i in range(len(varied_values[varName])):
-            print(f'Creating test SAM for {suite_type=}, {varName=}, var_value={varied_values[varName][i]}.')
+            print(f'Creating test SAM for {suite_type=}, {varName=}, var_value={varied_values[varName][i]},')
+            print(f'in create_sams(), defaults: {_tout_default=} {_nuin_default=} {_dadt_default=} {_alph_default=} {_r9_default=} {_rch_default=}')
             s = Test_SAM(hard_type=hard_type, model_type=suite_type, nreals=nreals, nloud=nloud, gpf_flag=gpfflag, 
                          tout_default=_tout_default, nuin_default=_nuin_default, dadt_default=_dadt_default, 
-                         alph_default=_alph_default, r9_default=_r9_default,
+                         alph_default=_alph_default, r9_default=_r9_default, rch_default=_rch_default,
                          var_value=varied_values[varName][i], hard_t=tau)
 
             all_sams = all_sams + [s]
@@ -796,7 +820,7 @@ if __name__ == '__main__':
 
 
 def load_sams_from_pkl(nloud=1, nreals=10, nfreqs=40, gpf_flag=False, tau=1.0,
-                  data_dir=_SIM_MERGER_PATH, fname_type='manual_moddefs'):
+                       data_dir=_SIM_MERGER_PATH, subdir=None, fname_type='manual_moddefs'):
 
     if fname_type=='manual_moddefs':
         samtype = 'gpf' if gpf_flag else 'gmr'
@@ -807,8 +831,12 @@ def load_sams_from_pkl(nloud=1, nreals=10, nfreqs=40, gpf_flag=False, tau=1.0,
         sam_pkl_fname = f'test_sam_nfreqs{nfreqs}_nreals{nreals}_nloud{nloud}_{fname_type}.pkl'
     else:
         raise ValueError(f'{fname_type=} not defined.')
-      
-    with open('/'.join((data_dir, sam_pkl_fname)), "rb") as f:
+
+    if subdir is not None:
+        fpath = '/'.join((data_dir, subdir, sam_pkl_fname))
+    else:
+        fpath = '/'.join((data_dir, sam_pkl_fname))
+    with open(fpath, "rb") as f:
         print(f'unpickling SAM data: {sam_pkl_fname}')
         sams = pickle.load(f)
         #sam, hard, gwb_new_sam, gwb_sam, freqs, freqs_edges = sam_data
@@ -821,7 +849,8 @@ def load_sams_from_pkl(nloud=1, nreals=10, nfreqs=40, gpf_flag=False, tau=1.0,
 def calc_sam_dadt_from_pkl(sam, nloud=1, nreals=10, nfreqs=40, 
                            num_steps=100, verbose=False):
 
-
+    # TO DO: make allowed param check generic once coded up for Fixed_Time_2PL_SAM
+    
     if isinstance(sam.hard, holo.hardening.Fixed_Time_2PL_SAM):
         print(f"before defining radii: {sam.sam.mtot.shape=} {sam.sam.mrat.shape=} {sam.sam.redz.shape=}")
         # () start from the hardening model's initial separation
@@ -850,7 +879,12 @@ def calc_sam_dadt_from_pkl(sam, nloud=1, nreals=10, nfreqs=40,
         return sam.sam, sam.hard, rads, dadt, sam.gwb_sam
         
     elif isinstance(sam.hard, holo.hardening.FixedOuterTime_InnerPL_SAM):
-        
+
+        if np.any(sam.hard._params_allowed==False):
+            warn = "Skipping dadt calculation for sam with invalid params."
+            log.warning(warn)
+            return (None,)*8           
+            
         # () start from the hardening model's initial separation
         rmax = sam.hard._rchar
         # (M,) end at the ISCO
@@ -873,8 +907,8 @@ def calc_sam_dadt_from_pkl(sam, nloud=1, nreals=10, nfreqs=40,
             print(sam.model_type)
             print(f"{sam.PARS['hard_outer_time']=}")
             print(sam.sam.mtot.shape, sam.sam.mrat.shape, sam.sam.redz.shape)
-            print(sam.gwb_sam[0].shape,sam.gwb_sam[1].shape,sam.gwb_sam[2].shape,sam.gwb_sam[3].shape)
-            print(f"{s.hard._rchar=} {sam.hard._rchar/PC=}")
+            #print(sam.gwb_sam[0].shape,sam.gwb_sam[1].shape,sam.gwb_sam[2].shape,sam.gwb_sam[3].shape)
+            print(f"{sam.hard._rchar=} {sam.hard._rchar/PC=}")
             print(rmin.shape, rmin.min(), rmin.max())
             print(np.log10(sam.hard._rchar), np.log10(rmin), num_steps)
 
@@ -1036,7 +1070,8 @@ def plot_dadt(sam_data, distance_units='pc', fixedTime='total',
     flhandles = []
     
     nu_mrk = ['s','^','o','*']
-    
+
+    print(f"in plot_dadt(): {len(sam_data)=}")
     for n,sd in enumerate(sam_data):
         
         if fixedTime=='total':
@@ -1051,6 +1086,10 @@ def plot_dadt(sam_data, distance_units='pc', fixedTime='total',
             #print(f"{hard._norm.shape=} {agw.shape=}")
             
         else: 
+            if sd[1]==None:
+                log.warning("skipping dadt plot for NoneType hardening data.")
+                continue
+
             # fixedTime == 'outer'
             if len(sd) == 7:
                 sam, hard, rads, dadt, agw, rzch, rzf = sd
@@ -1084,7 +1123,10 @@ def plot_dadt(sam_data, distance_units='pc', fixedTime='total',
                 print('q=', sam.mrat)
                 print('redz=', sam.redz)
 
-        
+        print(f"in compare_sams.plot_dadt(), plotting data for hard pars: ")
+        print(f"tout={hard._outer_time:.4g} rchar={hard._rchar:.4g} dadt={hard._dadt_rchar:.4g} "
+              f"r9={hard._r_gw_crit_9:.4g} alph={hard._alpha_gw_crit:.4g}")
+
         i_plot = 0
         for i in np.arange(0,sam.mtot.size,mt_nskip):
             
