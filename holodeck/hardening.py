@@ -1672,7 +1672,7 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
             self._params_allowed = self.check_params_allowed(sam.mtot, sam.mrat)
             if np.any(self._params_allowed==False):
                 log.warning(f"Found invalid hardening model params!")
-            print(f"{self._params_allowed=}")
+                print(f"{self._params_allowed=}")
 
         if self._enforce_speed_limit:
             if self._enforce_physical_params:
@@ -1759,6 +1759,12 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
         Assumes dadt < 0 everywhere; positive values will lead to invalid logs.
 
         """        
+
+        if self._enforce_physical_params:
+            self._params_allowed = self.check_params_allowed(sam.mtot, sam.mrat)
+            if np.any(self._params_allowed==False):
+                log.warning(f"Found invalid hardening model params!")
+            
         #print(f"in dadt class: {self._dadt_rchar=}, {self._rchar=}, {self._r_gw_crit_9=}, "
         #      f"{self._alpha_gw_crit=}, {self._nu_inner=}, {self._inner_time=}") 
 
@@ -1812,8 +1818,8 @@ class FixedOuterTime_InnerPL_SAM(_Hardening):
             eta_norm = _mrat / np.square(1 + _mrat) * 4
             dadt_phenom_rchar = self._dadt_rchar * eta_norm
                             
-            nu_inner = ( 1 + ( np.log(-dadt_gw_crit) - np.log(-dadt_phenom_rchar) ) / 
-                        ( np.log(self._rchar) - np.log(rgw_crit) ) 
+            nu_inner = ( 1 + ( np.log10(-dadt_gw_crit) - np.log10(-dadt_phenom_rchar) ) / 
+                        ( np.log10(self._rchar) - np.log10(rgw_crit) ) 
                        )
             # note that nu_inner only has mass dependence, not mrat dependence, by definition since dadt_rchar is multiplied by eta_norm
             dadt_vals = dadt_gw_crit * ( _sepa / rgw_crit ) ** (1.0-nu_inner)
@@ -2293,20 +2299,23 @@ def _radius_loss_cone_BBR1980_dehnen(mbh, mstar, gamma=1.0):
     rlc = np.power(mass_of_a_star / mbh, 0.25) * np.power(rbnd/rstar, 2.25) * rstar
     return rlc
 
-def allowed_param_range(mtot, mrat, alpha, rchar, r9rg, risco_in_rg=6.0, nu_inner_max=10.0):
+def allowed_param_range(mtot, mrat, alpha, rchar, r9rg, inner_model_type=1,
+                        risco_in_rg=6.0, nu_inner_absmax=10.0):
     """
-    Compute allowed parameter ranges for FixedOuterTime_InnerPL_SAM hardening with inner_model_type=1.
+    Compute allowed parameter ranges for FixedOuterTime_InnerPL_SAM hardening 
+    with inner_model_types 0 (not implemented yet) or 1.
 
-    This function evaluates the physically allowed ranges of:
-      - The critical radius for transition to the GW regime, for Mtot=1e9 Msun binaries, 
-        in gravitational radii (r9rg)
-      - The phenomenological hardening rate at rchar (dadt_rchar)
+    This function evaluates the physically allowed range of the critical radius for
+    transition to the GW regime, for Mtot=1e9 Msun binaries, in gravitational radii (r9rg)
+
+    It also evaluates the physically allowed range of either:
+      - [Model 0] The power-law index (nu_inner) for the phenomenological hardening rate 
+      - [Model 1] The phenomenological hardening rate at rchar (dadt_rchar)
 
     under constraints imposed by:
       - The ISCO radius
       - The characteristic radius r_char
-      - Gravitational-wave (GW) hardening rates
-      - A maximum allowed inner slope parameter (nu_inner_max)
+      - A maximum allowed inner slope parameter (nu_inner_absmax)
       - A global hardening rate speed limit (_DADT_SPEED_LIMIT)
 
     The function modifies `r9rg` in-place by setting invalid values to NaN.
@@ -2325,15 +2334,20 @@ def allowed_param_range(mtot, mrat, alpha, rchar, r9rg, risco_in_rg=6.0, nu_inne
     r9rg : array_like
         Critical GW transition radius for Mtot=1e9Msun binaries, in units of gravitational radii
         This array is modified in-place: invalid values are set to NaN.
+    inner_model_type : int, optional
+        sets type of inner model, varies which parameters are input values. 
+        only 0 and 1 defined (default: 1)
     risco_in_rg : float, optional
         ISCO radius in units of gravitational radius (default: 6.0).
-    nu_inner_max : float, optional
+    nu_inner_absmax : float, optional
         Maximum allowed absolute value of the inner hardening PL slope nu_inner (default: 10.0).
 
     Returns
     -------
     (min_lgr9rg, max_lgr9rg) : tuple of ndarray
         Allowed range of log10(r9rg) from geometric constraints: r_ISCO < r_gw_crit < r_char
+    (min_nuin, max_nuin) : tuple of ndarray
+        Allowed range of nu_inner        
     (min_lgdadtrchar, max_lgdadtrchar) : tuple of ndarray
         Allowed range of log10(-dadt_rchar) at each r_gw_crit, constrained by:
             - GW hardening rate at r_gw_crit
@@ -2343,11 +2357,21 @@ def allowed_param_range(mtot, mrat, alpha, rchar, r9rg, risco_in_rg=6.0, nu_inne
         Absolute allowed bounds on log10(-dadt_rchar) for extremal allowed values of r_gw_crit.
 
     """
-    
+
+    # Check for valid inner_model_type
+    if inner_model_type not in (0,1):
+        raise ValueError(f"{inner_model_type=} not defined. Must be 0 or 1.")
+
+    # Check for valid nu_inner_absmax (valid range is -nu_inner_absmax to +nu_inner_absmax, 
+    # unless constrained by 'speed limit')
+    if nu_inner_absmax < 0:
+        raise ValueError(f"{nu_inner_absmax=} not allowed. Must be > 0.")
+        
     # Normalize mass to 1e9 solar masses
     m9 = mtot / (1.0e9*MSOL)    
 
     # Compute allowed log10(r9rg) bounds from ISCO and r_char constraints
+    # (min depends on mtot & alpha, max depends on mtot, alpha, & rchar)
     lg_risco_in_rg = np.log10(risco_in_rg)
     min_lgr9rg = lg_risco_in_rg - alpha * np.log10(m9)
     max_lgr9rg = np.log10(rchar/utils.gravitational_radius(1.0e9*MSOL)) - (alpha+1) * np.log10(m9)
@@ -2357,8 +2381,7 @@ def allowed_param_range(mtot, mrat, alpha, rchar, r9rg, risco_in_rg=6.0, nu_inne
         log.warning(f"{min_lgr9rg=} > {max_lgr9rg=}")
 
     r9rg[(np.log10(r9rg)<min_lgr9rg)|(np.log10(r9rg)>max_lgr9rg)] = np.nan
-    
-    #(1-vmax)*lgrdiff + lgadotgw is a min or max depending if dadtrchar > or < dadt_gw_crit
+
     # Obtain physical critical GW transition radii from r9rg, min_lgr9rg, and max_lgr9rg:  
     fac = utils.gravitational_radius(1.0e9*MSOL) * m9**(alpha+1)
     rgw_crit = 10.0**np.log10(r9rg) * fac
@@ -2368,12 +2391,12 @@ def allowed_param_range(mtot, mrat, alpha, rchar, r9rg, risco_in_rg=6.0, nu_inne
     # Component masses
     m1, m2 = utils.m1m2_from_mtmr(mtot, mrat)
 
-    # larger rgw_crit = slower hardening in GW phase
+    # Calculate dadt at rgw_crit (larger rgw_crit = slower hardening in GW phase)
     lgdadtgwcrit = np.log10(-utils.gw_hardening_rate_dadt(m1, m2, rgw_crit))
     min_lgdadtgwcrit = np.log10(-utils.gw_hardening_rate_dadt(m1, m2, max_rgw_crit))
     max_lgdadtgwcrit = np.log10(-utils.gw_hardening_rate_dadt(m1, m2, min_rgw_crit))
     if np.any(min_lgdadtgwcrit >= max_lgdadtgwcrit):
-        print('something is wrong. min >= max in allowed_param_range().')
+        log.error('something is wrong. min >= max in allowed_param_range().')
         raise ValueError()
 
     lgrdiff = np.log10(rchar)-np.log10(rgw_crit)
@@ -2381,23 +2404,56 @@ def allowed_param_range(mtot, mrat, alpha, rchar, r9rg, risco_in_rg=6.0, nu_inne
 
     # Symmetric mass ratio normalization
     eta_norm = mrat / np.square(1 + mrat) * 4    
+    
+    # Compute allowed bounds on nu_inner and dadt_rchar
+    #(1-vmax)*lgrdiff + lgadotgw is a min or max depending if dadtrchar > or < dadt_gw_crit
+    if inner_model_type == 0:
+        # Allowed dadt_rchar range for given mtot, mrat, rchar, alpha, a & r9rg
+        # and allowed nu_inner range 
         
-    # Allowed dadt_rchar range at each r_gw_crit
-    min_lgdadtrchar = -1.0*np.log10(eta_norm) + (1-nu_inner_max)*lgrdiff + lgdadtgwcrit
-    max_lgdadtrchar_nuinmax = -1.0*np.log10(eta_norm) + (1+nu_inner_max)*lgrdiff + lgdadtgwcrit
-    max_lgdadtrchar = np.minimum(max_lgdadtrchar_nuinmax, np.log10(_DADT_SPEED_LIMIT))
-    if np.any(min_lgdadtrchar > max_lgdadtrchar):
-        log.warning(f"{min_lgdadtrchar=} > {max_lgdadtrchar=}")
+        # max nu_inner corresponds to min log(-dadt(rchar))
+        max_nuin = nu_inner_absmax
+        min_lgdadtrchar = -1.0*np.log10(eta_norm) + (1-nu_inner_absmax)*lgrdiff + lgdadtgwcrit
+        
+        # min nu_inner corresponds to max log(-dadt(rchar))
+        max_lgdadtrchar_nuinmax = -1.0*np.log10(eta_norm) + (1+nu_inner_absmax)*lgrdiff + lgdadtgwcrit
+        if max_lgdadtrchar_nuinmax > np.log10(_DADT_SPEED_LIMIT*eta_norm):
+            max_lgdadtrchar = np.log10(_DADT_SPEED_LIMIT*eta_norm)
+            min_nuin = 1 + ( lgdadtgwcrit - max_lgdadtrchar ) / lgrdiff 
+        else:
+            max_lgdadtrchar = copy(max_lgdadtrchar_nuinmax)
+            min_nuin = -1.0*nu_inner_absmax
 
-    # Absolute bounds on dadt_rchar (independent of specific r9rg choice)
-    absmin_lgdadtrchar = -1.0*np.log10(eta_norm) + (1-nu_inner_max)*max_lgrdiff + min_lgdadtgwcrit
-    absmax_lgdadtrchar_nuinmax = -1.0*np.log10(eta_norm) + (1+nu_inner_max)*max_lgrdiff + max_lgdadtgwcrit    
+    else:
+        # Allowed nu_inner range 
+        max_nuin = nu_inner_absmax 
+        min_nuin = -1.0*nu_inner_absmax
+        
+        # Allowed dadt_rchar range for given mtot, mrat, rchar, alpha, a& r9rg
+        min_lgdadtrchar = -1.0*np.log10(eta_norm) + (1-nu_inner_absmax)*lgrdiff + lgdadtgwcrit
+        max_lgdadtrchar_nuinmax = -1.0*np.log10(eta_norm) + (1+nu_inner_absmax)*lgrdiff + lgdadtgwcrit
+        max_lgdadtrchar = np.minimum(max_lgdadtrchar_nuinmax, np.log10(_DADT_SPEED_LIMIT))
+        if np.any(min_lgdadtrchar > max_lgdadtrchar):
+            log.warning(f"{min_lgdadtrchar=} > {max_lgdadtrchar=}")
+
+    # Absolute bounds on dadt_rchar for given mtot, mrat, rchar, & alpha (independent of specific r9rg choice)
+    absmin_lgdadtrchar = -1.0*np.log10(eta_norm) + (1-max_nuin)*max_lgrdiff + min_lgdadtgwcrit
+    absmax_lgdadtrchar_nuinmax = -1.0*np.log10(eta_norm) + (1+min_nuin)*max_lgrdiff + max_lgdadtgwcrit    
     absmax_lgdadtrchar = np.minimum(absmax_lgdadtrchar_nuinmax, np.log10(_DADT_SPEED_LIMIT))
+
+    # Safety checks
     if np.any(absmin_lgdadtrchar > absmax_lgdadtrchar):
         log.warning(f"{absmin_lgdadtrchar=} > {absmax_lgdadtrchar=}")
+    if np.any(min_lgdadtrchar > max_lgdadtrchar):
+        log.warning(f"{min_lgdadtrchar=} > {max_lgdadtrchar=}")
+    if np.any(min_nuin > max_nuin):
+        log.error(f"{min_nuin=} > {max_nuin=}")
+    if np.any(min_nuin) > nu_inner_absmax or np.any(max_nuin) > nu_inner_absmax:
+        log.error(f"{min_nuin=} or {max_nuin=} > {nu_inner_absmax}.")
         
     return (
         (min_lgr9rg, max_lgr9rg), 
+        (min_nuin, max_nuin),
         (min_lgdadtrchar, max_lgdadtrchar), 
         (absmin_lgdadtrchar, absmax_lgdadtrchar)
     )
