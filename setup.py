@@ -17,7 +17,7 @@ import numpy as np
 # NOTE: `short_description` gets first line of `__doc__` only (linebreaks not allowed by setuptools)
 short_description = __doc__.strip().split('\n')[0]
 
-with open(join('.', "README.md"), "r") as handle:
+with open(join('.', "README.md"), "r",encoding="utf8") as handle:
     long_description = handle.read()
 
 with open(join('.', "requirements.txt"), "r") as handle:
@@ -44,7 +44,7 @@ ext_cyutils = Extension(
 
     # Silence some undesired warnings
     define_macros=[('NPY_NO_DEPRECATED_API', 0)],
-    extra_compile_args=['-Wno-unreachable-code-fallthrough', '-Wno-unused-function'],
+    # extra_compile_args=['-Wno-unreachable-code-fallthrough', '-Wno-unused-function'],
 )
 
 ext_sam_cyutils = Extension(
@@ -62,7 +62,7 @@ ext_sam_cyutils = Extension(
 
     # Silence some undesired warnings
     define_macros=[('NPY_NO_DEPRECATED_API', 0)],
-    extra_compile_args=['-Wno-unreachable-code-fallthrough', '-Wno-unused-function'],
+    # extra_compile_args=['-Wno-unreachable-code-fallthrough', '-Wno-unused-function'],
 )
 
 cython_modules = cythonize(

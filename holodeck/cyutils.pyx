@@ -852,7 +852,7 @@ cdef double[:, :, :] _sam_calc_gwb_single_eccen_discrete(
 
 
 def sam_poisson_gwb(dist, hc2, nreals, normal_threshold=1e10):
-    return _sam_poisson_gwb(np.array(dist.shape), dist, hc2, nreals, long(normal_threshold))
+    return _sam_poisson_gwb(np.array(dist.shape, dtype=np.int64), dist, hc2, nreals, np.int64(normal_threshold))
 
 
 @cython.boundscheck(False)
@@ -860,7 +860,7 @@ def sam_poisson_gwb(dist, hc2, nreals, normal_threshold=1e10):
 @cython.nonecheck(False)
 @cython.cdivision(True)
 cdef double[:, :] _sam_poisson_gwb(
-    long[:] shape, double[:, :, :, :] dist, double[:, :, :, :] hc2, int nreals, long thresh
+    long long[:] shape, double[:, :, :, :] dist, double[:, :, :, :] hc2, int nreals, long long thresh
 ):
     cdef int nm = shape[0]
     cdef int nq = shape[1]
@@ -918,7 +918,7 @@ def ss_bg_hc(number, h2fdf, nreals, normal_threshold=1e10):
 
     """
 
-    cdef long[:] shape = np.array(number.shape)
+    cdef long long[:] shape = np.array(number.shape, dtype = np.int64)
     F = shape[3]
     R = nreals
     cdef np.ndarray[np.double_t, ndim=2] hc2ss = np.zeros((F,R))
@@ -932,15 +932,15 @@ def ss_bg_hc(number, h2fdf, nreals, normal_threshold=1e10):
 @cython.wraparound(False)
 @cython.nonecheck(False)
 @cython.cdivision(True)
-cdef void _ss_bg_hc(long[:] shape, double[:,:,:,:] h2fdf, double[:,:,:,:] number,
-            long nreals, long thresh,
-            double[:,:] hc2ss, double[:,:] hc2bg, long[:,:,:] ssidx):
+cdef void _ss_bg_hc(long long[:] shape, double[:,:,:,:] h2fdf, double[:,:,:,:] number,
+            long long nreals, long long thresh,
+            double[:,:] hc2ss, double[:,:] hc2bg, long long[:,:,:] ssidx):
     """
     Calculates the characteristic strain from loud single sources and a background of all other sources.
 
     Parameters
     ----------
-    shape : long[:] array
+    shape : long long[:] array
         shape of number, [M, Q, Z, F]
     number : double[:,:,:,:] array
         number per bin
@@ -952,7 +952,7 @@ cdef void _ss_bg_hc(long[:] shape, double[:,:,:,:] h2fdf, double[:,:,:,:] number
         (memory address of) single source characteristic strain squared array.
     hc2bg : double[:,:] array
         (memory address of) background characteristic strain squared array.
-    ssidx : [:,:,:] long array
+    ssidx : [:,:,:] long long array
         (memory address of) array for indices of max strain bins.
     bgpar :
         (memory address of) array of effective average parameters
@@ -1048,7 +1048,7 @@ def ss_bg_hc_and_par(number, h2fdf, nreals, mt, mr, rz, normal_threshold=1e10):
         M, q, z parameters of the loudest single sources.
     """
 
-    cdef long[:] shape = np.array(number.shape)
+    cdef long long[:] shape = np.array(number.shape, dtype=np.int64)
     F = shape[3]
     R = nreals
     cdef np.ndarray[np.double_t, ndim=2] hc2ss = np.zeros((F,R))
@@ -1065,17 +1065,17 @@ def ss_bg_hc_and_par(number, h2fdf, nreals, mt, mr, rz, normal_threshold=1e10):
 @cython.wraparound(True)
 @cython.nonecheck(True)
 @cython.cdivision(True)
-cdef void _ss_bg_hc_and_par(long[:] shape, double[:,:,:,:] h2fdf, double[:,:,:,:] number,
-            long nreals, long thresh,
+cdef void _ss_bg_hc_and_par(long long[:] shape, double[:,:,:,:] h2fdf, double[:,:,:,:] number,
+            long long nreals, long long thresh,
             double[:] mt, double[:] mr, double[:] rz,
-            double[:,:] hc2ss, double[:,:] hc2bg, long[:,:,:] ssidx,
+            double[:,:] hc2ss, double[:,:] hc2bg, long long[:,:,:] ssidx,
             double[:,:,:] bgpar, double[:,:,:] sspar):
     """
     Calculates the characteristic strain from loud single sources and a background of all other sources.
 
     Parameters
     __________
-    shape : long[:] array
+    shape : long long[:] array
         shape of number, [M, Q, Z, F]
     number : double[:,:,:,:] array
         number per bin
@@ -1094,7 +1094,7 @@ cdef void _ss_bg_hc_and_par(long[:] shape, double[:,:,:,:] h2fdf, double[:,:,:,:
         (memory address of) single source characteristic strain squared array.
     hc2bg : double[:,:] array
         (memory address of) background characteristic strain squared array.
-    ssidx : [:,:,:] long array
+    ssidx : [:,:,:] long long array
         (memory address of) array for indices of max strain bins.
     bgpar :
         (memory address of) array of effective average parameters
@@ -1187,8 +1187,8 @@ def sort_h2fdf(h2fdf):
     -------
     indices : ?
     """
-    cdef long[:] shape = np.array(h2fdf.shape)
-    cdef long size = shape[0] * shape[1] * shape[2]
+    cdef long long[:] shape = np.array(h2fdf.shape, dtype=np.int64)
+    cdef long long size = shape[0] * shape[1] * shape[2]
 
     cdef double[:]flat_h2fdf = h2fdf.flatten()
 
@@ -1204,7 +1204,7 @@ def sort_h2fdf(h2fdf):
 
     return
 
-cdef (int *) _sort_h2fdf(double[:] flat_h2fdf, long size):
+cdef (int *) _sort_h2fdf(double[:] flat_h2fdf, long long size):
 
     cdef (double *)array = <double *>malloc(size * sizeof(double))
     cdef (int *)indices = <int *>malloc(size * sizeof(int))
@@ -1248,7 +1248,7 @@ def loudest_hc_from_sorted(number, h2fdf, nreals, nloudest, msort, qsort, zsort,
         Char strain squared of the background.
     """
 
-    cdef long[:] shape = np.array(number.shape)
+    cdef long long[:] shape = np.array(number.shape, dtype=np.int64)
     F = shape[3]
     R = nreals
     L = nloudest
@@ -1263,16 +1263,16 @@ def loudest_hc_from_sorted(number, h2fdf, nreals, nloudest, msort, qsort, zsort,
 @cython.wraparound(True)
 @cython.nonecheck(True)
 @cython.cdivision(True)
-cdef void _loudest_hc_from_sorted(long[:] shape, double[:,:,:,:] h2fdf, double[:,:,:,:] number,
-            long nreals, long nloudest, long thresh,
-            long[:] msort, long[:] qsort, long[:] zsort,
+cdef void _loudest_hc_from_sorted(long long[:] shape, double[:,:,:,:] h2fdf, double[:,:,:,:] number,
+            long long nreals, long long nloudest, long long thresh,
+            long long[:] msort, long long[:] qsort, long long[:] zsort,
             double[:,:,:] hc2ss, double[:,:] hc2bg):
     """
     Calculates the characteristic strain from loud single sources and a background of all other sources.
 
     Parameters
     ----------
-    shape : long[:] array
+    shape : long long[:] array
         Shape of number, [M, Q, Z, F].
     number : double[:,:,:,:] array
         Number per bin.
@@ -1387,7 +1387,7 @@ def loudest_hc_and_par_from_sorted(number, h2fdf, nreals, nloudest, mt, mr, rz, 
         Indices of the loudest single sources.
     """
 
-    cdef long[:] shape = np.array(number.shape)
+    cdef long long[:] shape = np.array(number.shape, dtype=np.int64)
     F = shape[3]
     R = nreals
     L = nloudest
@@ -1406,17 +1406,17 @@ def loudest_hc_and_par_from_sorted(number, h2fdf, nreals, nloudest, mt, mr, rz, 
 @cython.wraparound(False)
 @cython.nonecheck(False)
 @cython.cdivision(True)
-cdef void _loudest_hc_and_par_from_sorted(long[:] shape, double[:,:,:,:] h2fdf, double[:,:,:,:] number,
-            long nreals, long nloudest, long thresh,
+cdef void _loudest_hc_and_par_from_sorted(long long[:] shape, double[:,:,:,:] h2fdf, double[:,:,:,:] number,
+            long long nreals, long long nloudest, long long thresh,
             double[:] mt, double[:] mr, double[:] rz,
-            long[:] msort, long[:] qsort, long[:] zsort,
-            double[:,:,:] hc2ss, double[:,:] hc2bg, double[:,:,:] lspar, double[:,:,:] bgpar, long[:,:,:,:] ssidx):
+            long long[:] msort, long long[:] qsort, long long[:] zsort,
+            double[:,:,:] hc2ss, double[:,:] hc2bg, double[:,:,:] lspar, double[:,:,:] bgpar, long long[:,:,:,:] ssidx):
     """
     Calculates the characteristic strain from loud single sources and a background of all other sources.
 
     Parameters
     ----------
-    shape : long[:] array
+    shape : long long[:] array
         Shape of number, [M, Q, Z, F].
     number : double[:,:,:,:] array
         Number per bin.
@@ -1593,7 +1593,7 @@ def loudest_hc_and_par_from_sorted_redz(
         mass, ratio, redshift, redshift_final
     """
 
-    cdef long[:] shape = np.array(number.shape)
+    cdef long long[:] shape = np.array(number.shape, dtype=np.int64)
     F = shape[3]
     R = nreals
     L = nloudest
@@ -1612,18 +1612,18 @@ def loudest_hc_and_par_from_sorted_redz(
 @cython.wraparound(False)
 @cython.nonecheck(False)
 @cython.cdivision(True)
-cdef void _loudest_hc_and_par_from_sorted_redz(long[:] shape, double[:,:,:,:] h2fdf, double[:,:,:,:] number,
-            long nreals, long nloudest, long thresh,
+cdef void _loudest_hc_and_par_from_sorted_redz(long long[:] shape, double[:,:,:,:] h2fdf, double[:,:,:,:] number,
+            long long nreals, long long nloudest, long long thresh,
             double[:] mt, double[:] mr, double[:] rz,
             double[:,:,:,:] redz_final, double[:,:,:,:] dcom_final, double[:,:,:,:] sepa, double[:,:,:,:] angs,
-            long[:] msort, long[:] qsort, long[:] zsort,
+            long long[:] msort, long long[:] qsort, long long[:] zsort,
             double[:,:,:] hc2ss, double[:,:] hc2bg, double[:,:,:,:] sspar, double[:,:,:] bgpar):
     """
     Calculates the characteristic strain from loud single sources and a background of all other sources.
 
     Parameters
     ----------
-    shape : long[:] array
+    shape : long long[:] array
         Shape of number, [M, Q, Z, F].
     number : double[:,:,:,:] array
         Number per bin.
@@ -1853,7 +1853,7 @@ def gamma_of_rho_interp(rho, rsort, rho_interp_grid, gamma_interp_grid):
 @cython.nonecheck(False)
 @cython.cdivision(True)
 cdef int _gamma_of_rho_interp(
-    double[:] rho, long[:] rsort,
+    double[:] rho, long long[:] rsort,
     double[:] rho_interp_grid, double[:] gamma_interp_grid,
     # output
     double[:] gamma
@@ -1933,7 +1933,7 @@ cdef int _snr_ss(
     double[:,:,:] Phi_0,
     double[:,:,:,:] S_i,
     double[:] freqs,
-    long npsrs, long nfreqs, long nreals, long nskies, long nloudest,
+    long long npsrs, long long nfreqs, long long nreals, long long nskies, long long nloudest,
     # output
     double[:,:,:,:] snr_ss
     ):
@@ -2044,8 +2044,8 @@ def Sh_rest(hc_ss, hc_bg, freqs, nexcl):
 
 
 cdef void _Sh_rest(
-    double[:,:,:] hc_ss, double[:,:,] hc_bg, double[:] freqs, long nexcl,
-    long nreals, long nfreqs, long nloudest,
+    double[:,:,:] hc_ss, double[:,:,] hc_bg, double[:] freqs, long long nexcl,
+    long long nreals, long long nfreqs, long long nloudest,
     double[:,:,:] Sh_rest):
     """
     Calculate the noise from all the single sources except the source in question

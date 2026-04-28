@@ -88,9 +88,9 @@ def ss_gws_redz(edges, redz, number, realize, loudest = 1, params = False):
     # indices of bins sorted by h2fdf
     indices = np.argsort(-h2fdf[...,0].flatten()) # just sort for first frequency
     unraveled = np.array(np.unravel_index(indices, (len(mt),len(mr),len(rz))))
-    msort = unraveled[0,:]
-    qsort = unraveled[1,:]
-    zsort = unraveled[2,:]
+    msort = np.int64(unraveled[0,:])
+    qsort = np.int64(unraveled[1,:])
+    zsort = np.int64(unraveled[2,:])
 
     if np.any(np.logical_and(redz<0, redz!=-1)):
                 err = np.sum(np.logical_and(redz<0, redz!=-1))
